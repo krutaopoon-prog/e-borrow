@@ -21,6 +21,7 @@
 
   <div class="card">
     <h2>เข้าสู่ระบบ</h2>
+    <div id="loginError"></div>
     <form id="loginForm" onsubmit="return false">
       <div class="field">
         <label for="studentId">รหัสนักศึกษา</label>
@@ -68,6 +69,8 @@
     const studentId = document.getElementById('studentId').value.trim();
     const pin = document.getElementById('pin').value;
 
+    document.getElementById('loginError').innerHTML = '';   // ล้างข้อความเก่าก่อน
+
     await UI.withButton(btn, async () => {
       try {
         const res = await API.write('login', {
@@ -79,7 +82,24 @@
         location.replace(CONFIG.BASE_PATH +
           (res.student.role === 'ADMIN' ? 'admin/dashboard.html' : 'catalog.html'));
       } catch (err) {
-        UI.apiError(err);
+        // แสดงค้างไว้ในหน้า ไม่ใช้ toast ที่ลอยบนสุดแล้วหายใน 5 วินาที
+        // เพราะกว่าเซิร์ฟเวอร์จะตอบ (3-10 วิ) ผู้ใช้อาจเลื่อนจอหรือมองที่อื่นอยู่
+        // แล้วจะไม่เห็นเลยว่าทำไมเข้าไม่ได้
+        const hint = {
+          ACCOUNT_PENDING:
+            'บัญชียังไม่ได้รับอนุมัติ — แจ้งครูให้กดอนุมัติในหน้า "นักเรียน" ก่อน',
+          ACCOUNT_SUSPENDED: 'บัญชีถูกระงับ กรุณาติดต่อครู',
+          ACCOUNT_LOCKED: 'ใส่ PIN ผิดหลายครั้ง กรุณารอ 15 นาทีแล้วลองใหม่',
+          INVALID_CREDENTIALS: 'ตรวจสอบรหัสนักศึกษาและ PIN อีกครั้ง — ถ้าลืม PIN แจ้งครูรีเซ็ตให้',
+          NETWORK_ERROR: 'เชื่อมต่อไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่'
+        }[err.code];
+
+        document.getElementById('loginError').innerHTML = `
+          <div class="alert alert--danger">
+            <strong>${UI.esc(err.messageTh || 'เข้าสู่ระบบไม่สำเร็จ')}</strong>
+            ${hint ? `<div class="text-sm mt-2">${UI.esc(hint)}</div>` : ''}
+          </div>`;
+
         document.getElementById('pin').value = '';
         document.getElementById('pin').focus();
       }
