@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>รายการของฉัน — E-Borrow</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div id="header"></div>
+
+<div class="page">
+  <h1>📋 รายการของฉัน</h1>
+  <div id="summary"></div>
+
+  <div class="category-strip" id="filters">
+    <button class="cat-chip is-active" data-f="open">กำลังยืม</button>
+    <button class="cat-chip" data-f="">ทั้งหมด</button>
+    <button class="cat-chip" data-f="closed">เสร็จสิ้นแล้ว</button>
+  </div>
+
+  <div id="list"></div>
+</div>
+
+<div id="bottomNav"></div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/cart.js"></script>
+<script src="js/ui.js"></script>
+<script>
+(async () => {
+  if (!UI.requireLogin()) return;
+
+  let filter = 'open';
+  let data = { transactions: [], summary: {} };
+
+  function renderNav() {
+    document.getElementById('header').innerHTML = UI.renderHeader('loans');
+    const n = Cart.count();
+    document.getElementById('bottomNav').innerHTML = `
+      <nav class="bottom-nav">
+        <a href="catalog.html"><span class="bottom-nav__icon">🏠</span>ยืมอุปกรณ์</a>
+        <a href="cart.html">
+          <span class="bottom-nav__icon">🛒${n ? `<span class="cart-badge">${n}</span>` : ''}</span>ตะกร้า</a>
+        <a href="my-loans.html" class="is-active">
+          <span class="bottom-nav__icon">📋</span>ของฉัน</a>
+      </nav>`;
+  }
+
+  function dueChip(txn) {
+    if (!txn.due_at) return '';
+    if (['RETURNED', 'CLOSED_CONSUMED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(txn.status)) {
+      return '';
+    }
+    const rel = UI.relativeDue(txn.due_at);
+    const cls = rel.overdue ? 'over' : (new Date(txn.due_at) - Date.now() < 86400000 ? 'soon' : 'ok');
+    return `<span class="due-chip due-chip--${cls}">
+      ${rel.overdue ? '⚠️ ' : '⏱ '}${rel.text}</span>`;
+  }
+
+  function render() {
+    const list = document.getElementById('list');
+    const txns = data.transactions;
+
+    if (!txns.length) {
+      list.innerHTML = UI.empty(
+        filter === 'open' ? 'ยังไม่มีรายการที่กำลังยืม' : 'ไม่มีรายการ', '📭') +
+        (filter === 'open'
+          ? `<div class="text-center"><a href="catalog.html" class="btn btn--primary">ไปยืมอุปกรณ์</a></div>`
+          : '');
+      return;
+    }
+
+    list.innerHTML = txns.map(t => {
+      const canCancel = ['REQUESTED', 'APPROVED'].includes(t.status);
+      const canReturn = ['IN_USE', 'PARTIALLY_RETURNED', 'OVERDUE'].includes(t.status);
+
+      return `
+      <div class="loan-card">
+        <div class="loan-card__head">
+          <div>
+            <div class="loan-card__id">${UI.esc(t.txn_id)}</div>
+            <div class="text-sm text-muted">ขอเมื่อ ${UI.formatDate(t.requested_at)}</div>
+          </div>
+          <div style="text-align:right">
+            ${UI.statusBadge(t.status)}
+            <div class="mt-2">${dueChip(t)}</div>
+          </div>
+        </div>
+
+        <div class="loan-card__body">
+          ${t.lines.map(l => `
+            <div class="line-item">
+              <div class="line-item__info">
+                <div class="line-item__name">${UI.esc(l.item_name)}</div>
+                <div class="line-item__sub">
+                  ${l.is_consumable
+                    ? '<span style="color:var(--warn)">ของสิ้นเปลือง</span>'
+                    : (l.qty_issued > 0
+                        ? `คืนแล้ว ${l.qty_returned}/${l.qty_issued}` +
+                          (l.qty_lost > 0 ? ` · หาย ${l.qty_lost}` : '')
+                        : 'ยังไม่ได้รับของ')}
+                </div>
+              </div>
+              <div class="line-item__qty">
+                ${l.qty_issued > 0 ? l.qty_issued : l.qty_approved} ${UI.esc(l.unit)}
+              </div>
+            </div>`).join('')}
+
+          ${t.return_photo_url ? `
+            <div class="mt-3">
+              <div class="text-sm text-muted">รูปตอนคืน</div>
+              <img src="${UI.esc(t.return_photo_url)}" alt="รูปตอนคืน"
+                   style="max-width:180px;border-radius:8px;margin-top:6px" loading="lazy">
+            </div>` : ''}
+        </div>
+
+        ${canCancel || canReturn ? `
+        <div class="loan-card__foot">
+          ${canCancel ? `<button class="btn btn--ghost btn--sm"
+            data-act="cancel" data-id="${UI.esc(t.txn_id)}">ยกเลิกคำขอ</button>` : ''}
+          ${canReturn ? `<a class="btn btn--primary btn--sm"
+            href="return.html?txn=${encodeURIComponent(t.txn_id)}">📷 คืนอุปกรณ์</a>` : ''}
+        </div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  function renderSummary() {
+    const s = data.summary || {};
+    const el = document.getElementById('summary');
+    if (s.overdue > 0) {
+      el.innerHTML = `<div class="alert alert--danger">
+        ⚠️ คุณมีอุปกรณ์<strong>เกินกำหนดคืน ${s.overdue} รายการ</strong>
+        — ต้องคืนก่อนจึงจะยืมใหม่ได้</div>`;
+    } else if (s.active > 0) {
+      el.innerHTML = `<div class="alert alert--info">
+        กำลังยืมอยู่ ${s.active} รายการ</div>`;
+    } else {
+      el.innerHTML = '';
+    }
+  }
+
+  async function load() {
+    UI.loading(true);
+    try {
+      data = await API.read('myTransactions', { status_filter: filter });
+      renderSummary();
+      render();
+    } catch (err) {
+      UI.apiError(err);
+    } finally {
+      UI.loading(false);
+    }
+  }
+
+  document.getElementById('filters').addEventListener('click', e => {
+    const chip = e.target.closest('.cat-chip');
+    if (!chip) return;
+    filter = chip.dataset.f;
+    document.querySelectorAll('#filters .cat-chip')
+      .forEach(c => c.classList.toggle('is-active', c === chip));
+    load();
+  });
+
+  document.getElementById('list').addEventListener('click', async e => {
+    const btn = e.target.closest('[data-act="cancel"]');
+    if (!btn) return;
+
+    if (!await UI.confirmDialog('ต้องการยกเลิกคำขอนี้ใช่ไหม?', 'ยกเลิกคำขอ')) return;
+
+    await UI.withButton(btn, async () => {
+      try {
+        await API.write('cancelRequest', { txn_id: btn.dataset.id });
+        UI.success('ยกเลิกคำขอแล้ว');
+        await load();
+      } catch (err) { UI.apiError(err); }
+    }, 'กำลังยกเลิก...');
+  });
+
+  renderNav();
+  await load();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>E-Borrow — ระบบยืม-คืนอุปกรณ์</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="page page--narrow" style="padding-top:60px">
+  <div class="text-center" style="margin-bottom:28px">
+    <div style="font-size:3.5rem">🔧</div>
+    <h1 id="appName">E-Borrow</h1>
+    <p class="text-muted">ระบบยืม-คืนอุปกรณ์ห้องเรียน</p>
+  </div>
+  <div class="card">
+    <p class="text-center text-muted">กำลังตรวจสอบ...</p>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script>
+(async () => {
+  const base = CONFIG.BASE_PATH;
+
+  if (!API.isLoggedIn()) {
+    location.replace(base + 'login.html');
+    return;
+  }
+
+  // มี token แต่ต้องเช็กว่ายังใช้ได้จริง — ครูอาจ revoke ไปแล้ว
+  try {
+    const res = await API.read('validateSession', {}, { noRedirect: true });
+    API.setSession(API.getToken(), res.student);
+    location.replace(base + (res.student.role === 'ADMIN'
+      ? 'admin/dashboard.html' : 'catalog.html'));
+  } catch {
+    API.clearSession();
+    location.replace(base + 'login.html');
+  }
+})();
+</script>
+</body>
+</html>

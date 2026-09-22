@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ตะกร้ายืม — E-Borrow</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div id="header"></div>
+
+<div class="page">
+  <h1>🛒 ตะกร้ายืม</h1>
+  <div id="alerts"></div>
+  <div id="cartBody"></div>
+</div>
+
+<div id="stickyBar"></div>
+<div id="bottomNav"></div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/cart.js"></script>
+<script src="js/ui.js"></script>
+<script>
+(async () => {
+  if (!UI.requireLogin()) return;
+
+  function renderNav() {
+    document.getElementById('header').innerHTML = UI.renderHeader('cart');
+    const n = Cart.count();
+    document.getElementById('bottomNav').innerHTML = `
+      <nav class="bottom-nav">
+        <a href="catalog.html"><span class="bottom-nav__icon">🏠</span>ยืมอุปกรณ์</a>
+        <a href="cart.html" class="is-active">
+          <span class="bottom-nav__icon">🛒${n ? `<span class="cart-badge">${n}</span>` : ''}</span>ตะกร้า</a>
+        <a href="my-loans.html"><span class="bottom-nav__icon">📋</span>ของฉัน</a>
+      </nav>`;
+  }
+
+  function render() {
+    const lines = Cart.read();
+    const body = document.getElementById('cartBody');
+    const bar = document.getElementById('stickyBar');
+
+    if (!lines.length) {
+      body.innerHTML = UI.empty('ตะกร้ายังว่างอยู่', '🛒') +
+        `<div class="text-center"><a href="catalog.html" class="btn btn--primary">เลือกอุปกรณ์</a></div>`;
+      bar.innerHTML = '';
+      return;
+    }
+
+    body.innerHTML = `
+      <div class="card card--flush">
+        ${lines.map(l => {
+          const max = l.max_per_borrow > 0
+            ? Math.min(l.max_per_borrow, l.available_qty) : l.available_qty;
+          return `
+          <div class="line-item" style="padding:12px 14px">
+            <div class="line-item__img">${UI.itemImage(l)}</div>
+            <div class="line-item__info">
+              <div class="line-item__name">${UI.esc(l.name_th)}</div>
+              <div class="line-item__sub">
+                เหลือ ${l.available_qty} ${UI.esc(l.unit)}
+                ${l.is_consumable ? ' · <span style="color:var(--warn)">ของสิ้นเปลือง ไม่ต้องคืน</span>' : ''}
+              </div>
+              <div class="flex-gap mt-2">
+                <div class="qty-control">
+                  <button data-act="dec" data-id="${UI.esc(l.item_id)}"
+                          ${l.qty <= 1 ? 'disabled' : ''}>−</button>
+                  <input type="number" value="${l.qty}" min="1" max="${max}"
+                         data-act="set" data-id="${UI.esc(l.item_id)}">
+                  <button data-act="inc" data-id="${UI.esc(l.item_id)}"
+                          ${l.qty >= max ? 'disabled' : ''}>+</button>
+                </div>
+                <button class="btn btn--ghost btn--sm" data-act="del"
+                        data-id="${UI.esc(l.item_id)}">ลบ</button>
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+
+      <div class="card">
+        <div class="field">
+          <label for="purpose">ใช้ทำอะไร (ไม่บังคับ)</label>
+          <textarea class="input" id="purpose" maxlength="200"
+                    placeholder="เช่น ใช้ในวิชาปฏิบัติงานอิเล็กทรอนิกส์"></textarea>
+        </div>
+      </div>
+
+      <div class="alert alert--info">
+        ส่งคำขอแล้ว <strong>รอครูอนุมัติและจ่ายของ</strong> — ไปรับอุปกรณ์ที่ครู
+      </div>`;
+
+    const totalQty = lines.reduce((n, l) => n + l.qty, 0);
+    bar.innerHTML = `
+      <div class="sticky-bar">
+        <div class="sticky-bar__info">
+          <strong>${lines.length}</strong> ชนิด · รวม <strong>${totalQty}</strong> ชิ้น
+        </div>
+        <button class="btn btn--primary btn--lg" id="submitBtn">ส่งคำขอยืม</button>
+      </div>`;
+
+    document.getElementById('submitBtn').addEventListener('click', submit);
+  }
+
+  async function submit() {
+    const btn = document.getElementById('submitBtn');
+    const lines = Cart.toPayload();
+    if (!lines.length) return;
+
+    await UI.withButton(btn, async () => {
+      try {
+        const res = await API.write('submitRequest', {
+          lines,
+          purpose: document.getElementById('purpose')?.value.trim() || ''
+        });
+
+        Cart.clear();
+        document.getElementById('cartBody').innerHTML = `
+          <div class="card text-center" style="padding:28px 20px">
+            <div style="font-size:3rem">✅</div>
+            <h2>ส่งคำขอเรียบร้อย</h2>
+            <p class="text-muted">${UI.esc(res.message_th)}</p>
+            <p class="text-sm text-muted">เลขที่: ${UI.esc(res.txn_id)}</p>
+            <div class="flex-gap mt-3" style="justify-content:center">
+              <a href="my-loans.html" class="btn btn--primary">ดูรายการของฉัน</a>
+              <a href="catalog.html" class="btn btn--ghost">ยืมเพิ่ม</a>
+            </div>
+          </div>`;
+        document.getElementById('stickyBar').innerHTML = '';
+        renderNav();
+        window.scrollTo(0, 0);
+
+      } catch (err) {
+        UI.apiError(err);
+
+        // สต็อกเปลี่ยนไปแล้ว — โหลดแคตตาล็อกใหม่แล้วปรับตะกร้าให้ตรงความจริง
+        if (err.code === 'INSUFFICIENT_STOCK') {
+          try {
+            const fresh = await API.read('getCatalog');
+            localStorage.setItem(CONFIG.CATALOG_CACHE_KEY, JSON.stringify(fresh));
+            const changes = Cart.reconcile(fresh.items);
+            if (changes.length) {
+              document.getElementById('alerts').innerHTML =
+                `<div class="alert alert--warn">${changes.map(UI.esc).join('<br>')}</div>`;
+            }
+            render();
+            renderNav();
+          } catch {}
+        }
+      }
+    }, 'กำลังส่ง...');
+  }
+
+  document.getElementById('cartBody').addEventListener('click', e => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn || btn.tagName === 'INPUT') return;
+    const id = btn.dataset.id;
+
+    if (btn.dataset.act === 'inc') Cart.setQty(id, Cart.qtyOf(id) + 1);
+    else if (btn.dataset.act === 'dec') Cart.setQty(id, Cart.qtyOf(id) - 1);
+    else if (btn.dataset.act === 'del') Cart.remove(id);
+    else return;
+
+    render();
+    renderNav();
+  });
+
+  document.getElementById('cartBody').addEventListener('change', e => {
+    const input = e.target.closest('input[data-act="set"]');
+    if (!input) return;
+    Cart.setQty(input.dataset.id, parseInt(input.value, 10) || 1);
+    render();
+    renderNav();
+  });
+
+  // ซิงก์จำนวนคงเหลือก่อนให้กดส่ง — ของอาจถูกคนอื่นยืมไประหว่างนี้
+  try {
+    const fresh = await API.read('getCatalog');
+    localStorage.setItem(CONFIG.CATALOG_CACHE_KEY, JSON.stringify(fresh));
+    const changes = Cart.reconcile(fresh.items);
+    if (changes.length) {
+      document.getElementById('alerts').innerHTML =
+        `<div class="alert alert--warn">ตะกร้าถูกปรับ:<br>${changes.map(UI.esc).join('<br>')}</div>`;
+    }
+  } catch {}
+
+  renderNav();
+  render();
+})();
+</script>
+</body>
+</html>

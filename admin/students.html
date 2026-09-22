@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>จัดการนักเรียน — E-Borrow</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+<div id="header"></div>
+
+<div class="page">
+  <h1>👥 จัดการนักเรียน</h1>
+
+  <div class="section" id="pendingSection">
+    <div class="section__title"><h2>⏳ รออนุมัติ</h2></div>
+    <div id="pending"></div>
+  </div>
+
+  <div class="section">
+    <div class="section__title"><h2>รายชื่อทั้งหมด</h2></div>
+    <div class="search-bar">
+      <input type="search" id="search" placeholder="🔍 ค้นหาชื่อหรือรหัส..." autocomplete="off">
+    </div>
+    <div id="list"></div>
+  </div>
+</div>
+
+<div id="modalHost"></div>
+
+<script src="../js/config.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/cart.js"></script>
+<script src="../js/ui.js"></script>
+<script>
+(async () => {
+  if (!UI.requireLogin(true)) return;
+  document.getElementById('header').innerHTML = UI.renderHeader('students');
+
+  let students = [];
+  let query = '';
+
+  const STATUS = {
+    PENDING: ['รออนุมัติ', 'warn'],
+    ACTIVE: ['ใช้งานได้', 'ok'],
+    SUSPENDED: ['ระงับ', 'danger'],
+    GRADUATED: ['จบแล้ว', 'muted']
+  };
+
+  async function load() {
+    UI.loading(true);
+    try {
+      const [p, all] = await Promise.all([
+        API.read('adminPendingStudents'),
+        API.read('adminListStudents', {})
+      ]);
+      renderPending(p.students);
+      students = all.students;
+      render();
+    } catch (err) {
+      UI.apiError(err);
+    } finally {
+      UI.loading(false);
+    }
+  }
+
+  function renderPending(list) {
+    document.getElementById('pending').innerHTML = list.length ? `
+      <div class="card card--flush table-wrap">
+        <table class="data">
+          <thead><tr>
+            <th>ชื่อ-สกุล</th><th>รหัส</th><th>ระดับชั้น</th><th>สาขา</th><th>สมัครเมื่อ</th><th></th>
+          </tr></thead>
+          <tbody>${list.map(s => `
+            <tr data-id="${UI.esc(s.student_id)}">
+              <td><strong>${UI.esc(s.full_name)}</strong></td>
+              <td>${UI.esc(s.student_id)}</td>
+              <td>${UI.esc(s.level)}</td>
+              <td class="wrap">${UI.esc(s.department)}
+                ${s.section ? ` กลุ่ม ${UI.esc(s.section)}` : ''}</td>
+              <td class="text-sm text-muted">${UI.formatDate(s.registered_at, false)}</td>
+              <td>
+                <button class="btn btn--ok btn--sm" data-act="approve">✓ อนุมัติ</button>
+                <button class="btn btn--ghost btn--sm" data-act="reject">ปฏิเสธ</button>
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>` : `<p class="text-muted text-sm">ไม่มีนักเรียนรออนุมัติ</p>`;
+  }
+
+  function render() {
+    const q = query.trim().toLowerCase();
+    const list = students.filter(s =>
+      !q || `${s.full_name} ${s.student_id}`.toLowerCase().includes(q));
+
+    document.getElementById('list').innerHTML = list.length ? `
+      <div class="card card--flush table-wrap">
+        <table class="data">
+          <thead><tr>
+            <th>ชื่อ-สกุล</th><th>รหัส</th><th>ระดับชั้น</th>
+            <th>สถานะ</th><th>ยืมอยู่</th><th>เกินกำหนด</th><th></th>
+          </tr></thead>
+          <tbody>${list.map(s => {
+            const st = STATUS[s.status] || [s.status, 'muted'];
+            return `
+            <tr data-id="${UI.esc(s.student_id)}">
+              <td><strong>${UI.esc(s.full_name)}</strong>
+                ${s.role === 'ADMIN' ? '<span class="badge badge--info">ครู</span>' : ''}</td>
+              <td>${UI.esc(s.student_id)}</td>
+              <td class="wrap">${UI.esc(s.level)}<div class="text-sm text-muted">
+                ${UI.esc(s.department)}</div></td>
+              <td><span class="badge badge--${st[1]}">${st[0]}</span></td>
+              <td>${s.active_loan_count || 0}</td>
+              <td>${s.overdue_count
+                ? `<span style="color:var(--danger);font-weight:600">${s.overdue_count}</span>`
+                : '0'}</td>
+              <td>
+                <button class="btn btn--ghost btn--sm" data-act="pin">รีเซ็ต PIN</button>
+                ${s.status === 'ACTIVE'
+                  ? '<button class="btn btn--ghost btn--sm" data-act="suspend">ระงับ</button>'
+                  : s.status === 'SUSPENDED'
+                    ? '<button class="btn btn--ghost btn--sm" data-act="activate">เปิดใช้</button>'
+                    : ''}
+              </td>
+            </tr>`;
+          }).join('')}
+          </tbody>
+        </table>
+      </div>` : UI.empty(q ? 'ไม่พบนักเรียน' : 'ยังไม่มีนักเรียนในระบบ', '👥');
+  }
+
+  async function setApproval(studentId, approve, btn) {
+    await UI.withButton(btn, async () => {
+      try {
+        await API.call('adminApproveStudent', { student_id: studentId, approve });
+        UI.success(approve ? 'อนุมัติแล้ว' : 'ปฏิเสธแล้ว');
+        await load();
+      } catch (err) { UI.apiError(err); }
+    }, 'กำลังบันทึก...');
+  }
+
+  function openPinModal(student) {
+    document.getElementById('modalHost').innerHTML = `
+      <div class="modal-backdrop is-visible">
+        <div class="modal">
+          <h2>รีเซ็ต PIN</h2>
+          <p class="text-sm text-muted">
+            ${UI.esc(student.full_name)} (${UI.esc(student.student_id)})
+          </p>
+          <div class="field">
+            <label>PIN ใหม่ ${student.role === 'ADMIN' ? '(6-8 หลัก)' : '(4 หลัก)'}</label>
+            <input class="input pin-input" type="text" id="newPin" inputmode="numeric"
+                   maxlength="8" placeholder="••••">
+            <div class="hint">แจ้ง PIN นี้ให้นักเรียนแล้วบอกให้เปลี่ยนทันที</div>
+          </div>
+          <div class="alert alert--warn text-sm">
+            รีเซ็ตแล้วนักเรียนจะถูกออกจากระบบทุกเครื่อง
+          </div>
+          <div class="modal__actions">
+            <button class="btn btn--ghost" id="cancelBtn">ยกเลิก</button>
+            <button class="btn btn--primary" id="okBtn">รีเซ็ต</button>
+          </div>
+        </div>
+      </div>`;
+
+    const close = () => document.getElementById('modalHost').innerHTML = '';
+    document.getElementById('cancelBtn').addEventListener('click', close);
+    document.getElementById('okBtn').addEventListener('click', async e => {
+      const pin = document.getElementById('newPin').value.trim();
+      if (!pin) { UI.error('กรุณาใส่ PIN ใหม่'); return; }
+
+      await UI.withButton(e.target, async () => {
+        try {
+          await API.call('adminResetPin', { student_id: student.student_id, new_pin: pin });
+          UI.success('รีเซ็ต PIN แล้ว — แจ้งนักเรียนว่า PIN ใหม่คือ ' + pin);
+          close();
+        } catch (err) { UI.apiError(err); }
+      }, 'กำลังรีเซ็ต...');
+    });
+  }
+
+  document.getElementById('pending').addEventListener('click', e => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const id = btn.closest('tr').dataset.id;
+    setApproval(id, btn.dataset.act === 'approve', btn);
+  });
+
+  document.getElementById('list').addEventListener('click', async e => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const id = btn.closest('tr').dataset.id;
+    const student = students.find(s => s.student_id === id);
+    if (!student) return;
+
+    if (btn.dataset.act === 'pin') {
+      openPinModal(student);
+    } else if (btn.dataset.act === 'suspend') {
+      if (!await UI.confirmDialog(
+        `ระงับบัญชีของ ${student.full_name}? จะยืมอุปกรณ์ไม่ได้`, 'ระงับ')) return;
+      setApproval(id, false, btn);
+    } else if (btn.dataset.act === 'activate') {
+      setApproval(id, true, btn);
+    }
+  });
+
+  let searchTimer;
+  document.getElementById('search').addEventListener('input', e => {
+    query = e.target.value;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(render, 180);
+  });
+
+  document.getElementById('modalHost').addEventListener('click', e => {
+    if (e.target.classList.contains('modal-backdrop')) {
+      document.getElementById('modalHost').innerHTML = '';
+    }
+  });
+
+  await load();
+})();
+</script>
+</body>
+</html>

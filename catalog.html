@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ยืมอุปกรณ์ — E-Borrow</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div id="header"></div>
+
+<div class="page">
+  <div id="alerts"></div>
+
+  <div class="search-bar">
+    <input type="search" id="search" placeholder="🔍 ค้นหาอุปกรณ์..." autocomplete="off">
+  </div>
+
+  <div class="category-strip" id="categories"></div>
+
+  <div id="itemGrid" class="item-grid"></div>
+  <div id="emptyState"></div>
+</div>
+
+<div id="bottomNav"></div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/cart.js"></script>
+<script src="js/ui.js"></script>
+<script>
+(async () => {
+  if (!UI.requireLogin()) return;
+
+  let catalog = { items: [], categories: [] };
+  let activeCategory = '';
+  let query = '';
+
+  function renderNav() {
+    document.getElementById('header').innerHTML = UI.renderHeader('catalog');
+    const n = Cart.count();
+    document.getElementById('bottomNav').innerHTML = `
+      <nav class="bottom-nav">
+        <a href="catalog.html" class="is-active">
+          <span class="bottom-nav__icon">🏠</span>ยืมอุปกรณ์</a>
+        <a href="cart.html">
+          <span class="bottom-nav__icon">🛒${n ? `<span class="cart-badge">${n}</span>` : ''}</span>ตะกร้า</a>
+        <a href="my-loans.html">
+          <span class="bottom-nav__icon">📋</span>ของฉัน</a>
+      </nav>`;
+  }
+
+  function stockClass(item) {
+    if (item.available_qty <= 0) return 'out';
+    if (item.available_qty <= 2) return 'low';
+    return 'ok';
+  }
+
+  function renderItems() {
+    const q = query.trim().toLowerCase();
+    const list = catalog.items.filter(i => {
+      if (activeCategory && i.category_id !== activeCategory) return false;
+      if (q) {
+        const hay = `${i.name_th} ${i.name_en} ${i.tags}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+
+    const grid = document.getElementById('itemGrid');
+    const empty = document.getElementById('emptyState');
+
+    if (!list.length) {
+      grid.innerHTML = '';
+      empty.innerHTML = UI.empty(
+        q ? `ไม่พบอุปกรณ์ที่ตรงกับ "${query}"` : 'ยังไม่มีอุปกรณ์ในหมวดนี้', '🔍');
+      return;
+    }
+    empty.innerHTML = '';
+
+    grid.innerHTML = list.map(item => {
+      const out = item.available_qty <= 0;
+      const inCart = Cart.qtyOf(item.item_id);
+      const max = item.max_per_borrow > 0
+        ? Math.min(item.max_per_borrow, item.available_qty) : item.available_qty;
+      const atMax = inCart >= max;
+
+      return `
+      <div class="item-card">
+        <div class="item-card__media">
+          ${UI.itemImage(item)}
+          ${item.is_consumable ? '<span class="tag-consumable">สิ้นเปลือง</span>' : ''}
+          ${out ? '<div class="tag-out">หมด</div>' : ''}
+        </div>
+        <div class="item-card__body">
+          <div class="item-card__name">${UI.esc(item.name_th)}</div>
+          <div class="item-card__meta">
+            <span class="item-card__stock item-card__stock--${stockClass(item)}">
+              เหลือ ${item.available_qty} ${UI.esc(item.unit)}
+            </span>
+            ${item.max_per_borrow > 0
+              ? `<span class="text-muted" style="font-size:.72rem">ไม่เกิน ${item.max_per_borrow}</span>`
+              : ''}
+          </div>
+          <button class="btn-add" data-id="${UI.esc(item.item_id)}"
+                  ${out || atMax ? 'disabled' : ''}>
+            ${out ? 'หมด' : inCart ? `ในตะกร้า ${inCart} ${UI.esc(item.unit)}` : '+ ใส่ตะกร้า'}
+          </button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderCategories() {
+    const counts = {};
+    catalog.items.forEach(i => {
+      counts[i.category_id] = (counts[i.category_id] || 0) + 1;
+    });
+
+    document.getElementById('categories').innerHTML = `
+      <button class="cat-chip ${!activeCategory ? 'is-active' : ''}" data-cat="">
+        ทั้งหมด (${catalog.items.length})
+      </button>
+      ${catalog.categories.filter(c => counts[c.category_id]).map(c => `
+        <button class="cat-chip ${activeCategory === c.category_id ? 'is-active' : ''}"
+                data-cat="${UI.esc(c.category_id)}">
+          ${UI.esc(c.icon || '📦')} ${UI.esc(c.name_th)} (${counts[c.category_id]})
+        </button>
+      `).join('')}`;
+  }
+
+  async function loadCatalog(force) {
+    // ใช้แคชในเครื่องก่อน เปิดหน้าเร็วทันที แล้วค่อยเช็กเวอร์ชันเบื้องหลัง
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem(CONFIG.CATALOG_CACHE_KEY) || 'null'); } catch {}
+
+    if (cached && !force) {
+      catalog = cached;
+      renderCategories();
+      renderItems();
+    } else {
+      UI.loading(true, 'กำลังโหลดอุปกรณ์...');
+    }
+
+    try {
+      const fresh = await API.read('getCatalog');
+      catalog = fresh;
+      try { localStorage.setItem(CONFIG.CATALOG_CACHE_KEY, JSON.stringify(fresh)); } catch {}
+
+      const changes = Cart.reconcile(fresh.items);
+      if (changes.length) {
+        document.getElementById('alerts').innerHTML =
+          `<div class="alert alert--warn">ตะกร้าถูกปรับ: ${changes.map(UI.esc).join(', ')}</div>`;
+        renderNav();
+      }
+
+      renderCategories();
+      renderItems();
+    } catch (err) {
+      if (!cached) UI.apiError(err);
+    } finally {
+      UI.loading(false);
+    }
+  }
+
+  // ---- events ----
+
+  document.getElementById('categories').addEventListener('click', e => {
+    const chip = e.target.closest('.cat-chip');
+    if (!chip) return;
+    activeCategory = chip.dataset.cat;
+    renderCategories();
+    renderItems();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  let searchTimer;
+  document.getElementById('search').addEventListener('input', e => {
+    query = e.target.value;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(renderItems, 180);
+  });
+
+  document.getElementById('itemGrid').addEventListener('click', e => {
+    const btn = e.target.closest('.btn-add');
+    if (!btn || btn.disabled) return;
+
+    const item = catalog.items.find(i => i.item_id === btn.dataset.id);
+    if (!item) return;
+
+    Cart.add(item, 1);
+    renderNav();
+    renderItems();
+    UI.toast(`เพิ่ม "${item.name_th}" ลงตะกร้าแล้ว`, 'success', 1600);
+  });
+
+  document.addEventListener('cart:changed', renderNav);
+
+  renderNav();
+  await loadCatalog(false);
+})();
+</script>
+</body>
+</html>

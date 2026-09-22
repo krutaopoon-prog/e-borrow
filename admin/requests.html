@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>คำขอยืม — E-Borrow</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+<div id="header"></div>
+
+<div class="page">
+  <div class="flex-between">
+    <h1>📥 คำขอยืม</h1>
+    <div class="flex-gap no-print">
+      <button class="btn btn--ghost btn--sm" id="printBtn">🖨️ พิมพ์ใบหยิบของ</button>
+      <button class="btn btn--ghost btn--sm" id="refreshBtn">🔄</button>
+    </div>
+  </div>
+
+  <div id="counts"></div>
+
+  <div class="section" id="pickListSection">
+    <div class="section__title">
+      <h2>📦 ใบรายการหยิบของ</h2>
+      <span class="text-sm text-muted">เรียงตามตำแหน่งตู้</span>
+    </div>
+    <div id="pickList"></div>
+  </div>
+
+  <div class="section no-print">
+    <div class="section__title"><h2>รายการคำขอ</h2></div>
+    <div id="requests"></div>
+  </div>
+</div>
+
+<script src="../js/config.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/cart.js"></script>
+<script src="../js/ui.js"></script>
+<script>
+(async () => {
+  if (!UI.requireLogin(true)) return;
+  document.getElementById('header').innerHTML = UI.renderHeader('requests');
+
+  async function load() {
+    UI.loading(true);
+    try {
+      const d = await API.read('adminPendingRequests');
+
+      document.getElementById('counts').innerHTML = `
+        <div class="stat-grid">
+          <div class="stat ${d.counts.awaiting_approval ? 'stat--warn' : ''}">
+            <div class="stat__value">${d.counts.awaiting_approval}</div>
+            <div class="stat__label">รออนุมัติ</div>
+          </div>
+          <div class="stat ${d.counts.awaiting_issue ? 'stat--warn' : ''}">
+            <div class="stat__value">${d.counts.awaiting_issue}</div>
+            <div class="stat__label">รอจ่ายของ</div>
+          </div>
+        </div>`;
+
+      // ใบหยิบของ — จัดกลุ่มตามตำแหน่งตู้ ครูเดินรอบเดียวหยิบครบ
+      const byLocation = {};
+      d.pick_list.forEach(p => {
+        (byLocation[p.storage_location] ||= []).push(p);
+      });
+
+      document.getElementById('pickList').innerHTML = d.pick_list.length ? `
+        <div class="card">
+          ${Object.entries(byLocation).map(([loc, items]) => `
+            <div style="margin-bottom:14px">
+              <div style="font-weight:600;color:var(--brand);
+                          border-bottom:1px solid var(--line);padding-bottom:4px;margin-bottom:6px">
+                📍 ${UI.esc(loc)}
+              </div>
+              ${items.map(p => `
+                <div class="flex-between" style="padding:3px 0;font-size:.9rem">
+                  <span>${UI.esc(p.item_name)}
+                    ${p.is_consumable
+                      ? '<span class="badge badge--warn" style="font-size:.65rem">สิ้นเปลือง</span>'
+                      : ''}</span>
+                  <span><strong>${p.qty}</strong> ${UI.esc(p.unit)}
+                    <span class="text-muted">→ ${UI.esc(p.student_name)}</span></span>
+                </div>`).join('')}
+            </div>`).join('')}
+        </div>` : `<p class="text-muted text-sm">ไม่มีของที่ต้องหยิบ</p>`;
+
+      document.getElementById('requests').innerHTML = d.transactions.length
+        ? d.transactions.map(renderCard).join('')
+        : UI.empty('ไม่มีคำขอค้างอยู่', '✅');
+
+    } catch (err) {
+      UI.apiError(err);
+    } finally {
+      UI.loading(false);
+    }
+  }
+
+  function renderCard(t) {
+    const isRequested = t.status === 'REQUESTED';
+
+    return `
+    <div class="loan-card" data-txn="${UI.esc(t.txn_id)}">
+      <div class="loan-card__head">
+        <div>
+          <strong>${UI.esc(t.student_name)}</strong>
+          <div class="text-sm text-muted">${UI.esc(t.student_id)} · ${UI.esc(t.txn_id)}</div>
+          <div class="text-sm text-muted">ขอเมื่อ ${UI.formatDate(t.requested_at)}</div>
+        </div>
+        ${UI.statusBadge(t.status)}
+      </div>
+
+      <div class="loan-card__body">
+        ${t.lines.map(l => `
+          <div class="line-item" data-line="${UI.esc(l.line_id)}">
+            <div class="line-item__info">
+              <div class="line-item__name">${UI.esc(l.item_name)}
+                ${l.is_consumable
+                  ? '<span class="badge badge--warn" style="font-size:.65rem">สิ้นเปลือง</span>'
+                  : ''}</div>
+              <div class="line-item__sub">ขอ ${l.qty_requested} ${UI.esc(l.unit)}</div>
+            </div>
+            <div class="qty-control">
+              <button type="button" data-act="dec">−</button>
+              <input type="number" class="qty-give" value="${l.qty_approved}"
+                     min="0" max="${l.qty_requested}">
+              <button type="button" data-act="inc">+</button>
+            </div>
+          </div>`).join('')}
+
+        ${t.purpose ? `<p class="text-sm text-muted mt-2">
+          <strong>วัตถุประสงค์:</strong> ${UI.esc(t.purpose)}</p>` : ''}
+      </div>
+
+      <div class="loan-card__foot">
+        ${isRequested ? `
+          <button class="btn btn--ghost btn--sm" data-act="reject">ปฏิเสธ</button>
+          <button class="btn btn--ghost btn--sm" data-act="approve">อนุมัติไว้ก่อน</button>
+        ` : ''}
+        <button class="btn btn--primary btn--sm" data-act="issue">
+          ${isRequested ? '✓ อนุมัติ + จ่ายของเลย' : '✓ จ่ายของแล้ว'}
+        </button>
+      </div>
+    </div>`;
+  }
+
+  function collectOverrides(card, field) {
+    const out = [];
+    card.querySelectorAll('[data-line]').forEach(row => {
+      out.push({
+        line_id: row.dataset.line,
+        [field]: parseInt(row.querySelector('.qty-give').value, 10) || 0
+      });
+    });
+    return out;
+  }
+
+  document.getElementById('requests').addEventListener('click', async e => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+
+    const act = btn.dataset.act;
+    const row = btn.closest('[data-line]');
+
+    // ปุ่มปรับจำนวน
+    if (act === 'inc' || act === 'dec') {
+      const input = row.querySelector('.qty-give');
+      const max = parseInt(input.max, 10);
+      const cur = parseInt(input.value, 10) || 0;
+      input.value = act === 'inc' ? Math.min(max, cur + 1) : Math.max(0, cur - 1);
+      return;
+    }
+
+    const card = btn.closest('[data-txn]');
+    const txnId = card.dataset.txn;
+
+    if (act === 'reject') {
+      const ok = await UI.confirmDialog('ปฏิเสธคำขอนี้ใช่ไหม? อุปกรณ์จะถูกคืนเข้าคลัง', 'ปฏิเสธ');
+      if (!ok) return;
+      await UI.withButton(btn, async () => {
+        try {
+          await API.write('adminRejectRequest', { txn_id: txnId, reason: 'ครูปฏิเสธคำขอ' });
+          UI.success('ปฏิเสธแล้ว');
+          await load();
+        } catch (err) { UI.apiError(err); }
+      }, 'กำลังปฏิเสธ...');
+
+    } else if (act === 'approve') {
+      await UI.withButton(btn, async () => {
+        try {
+          await API.write('adminApproveRequest', {
+            txn_id: txnId,
+            line_overrides: collectOverrides(card, 'qty_approved')
+          });
+          UI.success('อนุมัติแล้ว — รอจ่ายของ');
+          await load();
+        } catch (err) { UI.apiError(err); }
+      }, 'กำลังอนุมัติ...');
+
+    } else if (act === 'issue') {
+      await UI.withButton(btn, async () => {
+        try {
+          const res = await API.write('adminIssueTransaction', {
+            txn_id: txnId,
+            line_overrides: collectOverrides(card, 'qty_issued')
+          });
+          UI.success(res.message_th);
+          await load();
+        } catch (err) { UI.apiError(err); }
+      }, 'กำลังบันทึก...');
+    }
+  });
+
+  document.getElementById('printBtn').addEventListener('click', () => window.print());
+  document.getElementById('refreshBtn').addEventListener('click', load);
+
+  await load();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>สมัครใช้งาน — E-Borrow</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="page page--narrow" style="padding-top:28px">
+
+  <div class="text-center" style="margin-bottom:20px">
+    <div style="font-size:2.4rem">📝</div>
+    <h1>สมัครใช้งาน</h1>
+    <p class="text-muted text-sm">สมัครครั้งเดียว ใช้ได้ตลอดปีการศึกษา</p>
+  </div>
+
+  <div class="alert alert--info">
+    สมัครแล้วต้องรอ<strong>ครูอนุมัติ</strong>ก่อนจึงจะยืมอุปกรณ์ได้
+  </div>
+
+  <div class="card">
+    <form id="regForm">
+      <div class="field">
+        <label for="studentId">รหัสนักศึกษา <span class="required">*</span></label>
+        <input class="input" type="text" id="studentId" inputmode="numeric" required
+               pattern="[0-9]{4,15}" placeholder="เช่น 67301001">
+        <div class="hint">ใช้รหัสนี้เข้าสู่ระบบ</div>
+      </div>
+
+      <div class="field">
+        <label for="fullName">ชื่อ-สกุล <span class="required">*</span></label>
+        <input class="input" type="text" id="fullName" required maxlength="100"
+               placeholder="เช่น สมชาย ใจดี">
+      </div>
+
+      <div class="field">
+        <label for="level">ระดับชั้น <span class="required">*</span></label>
+        <select class="input" id="level" required>
+          <option value="">— เลือกระดับชั้น —</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="department">สาขาวิชา <span class="required">*</span></label>
+        <select class="input" id="department" required>
+          <option value="">— เลือกสาขาวิชา —</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="section">กลุ่ม/ห้อง</label>
+        <input class="input" type="text" id="section" maxlength="10" placeholder="เช่น 1 (ไม่บังคับ)">
+      </div>
+
+      <div class="field">
+        <label for="phone">เบอร์โทร</label>
+        <input class="input" type="tel" id="phone" inputmode="tel" maxlength="15"
+               placeholder="ไม่บังคับ — ไว้ให้ครูติดต่อ">
+      </div>
+
+      <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+
+      <div class="field">
+        <label for="pin">ตั้ง PIN 4 หลัก <span class="required">*</span></label>
+        <input class="input pin-input" type="password" id="pin" inputmode="numeric"
+               required minlength="4" maxlength="4" pattern="[0-9]{4}" placeholder="••••">
+        <div class="hint">จำให้ดี ใช้เข้าระบบทุกครั้ง — ห้ามใช้เลขซ้ำหรือเรียงกัน เช่น 1111, 1234</div>
+      </div>
+
+      <div class="field">
+        <label for="pin2">ยืนยัน PIN <span class="required">*</span></label>
+        <input class="input pin-input" type="password" id="pin2" inputmode="numeric"
+               required minlength="4" maxlength="4" pattern="[0-9]{4}" placeholder="••••">
+      </div>
+
+      <button type="submit" class="btn btn--primary btn--block btn--lg" id="submitBtn">
+        สมัครใช้งาน
+      </button>
+    </form>
+
+    <p class="text-center mt-3 mb-0 text-sm">
+      มีบัญชีแล้ว? <a href="login.html">เข้าสู่ระบบ</a>
+    </p>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/cart.js"></script>
+<script src="js/ui.js"></script>
+<script>
+(async () => {
+  try {
+    const cfg = await API.read('getPublicConfig', {}, { noRedirect: true, retries: 2 });
+
+    const levelSel = document.getElementById('level');
+    (cfg.levels || []).forEach(l => levelSel.add(new Option(l, l)));
+
+    const deptSel = document.getElementById('department');
+    (cfg.departments || []).forEach(d => deptSel.add(new Option(d, d)));
+  } catch (err) {
+    UI.error('โหลดข้อมูลไม่ได้ ตรวจสอบอินเทอร์เน็ต');
+  }
+
+  document.getElementById('regForm').addEventListener('submit', async e => {
+    e.preventDefault();
+
+    const pin = document.getElementById('pin').value;
+    const pin2 = document.getElementById('pin2').value;
+
+    if (pin !== pin2) {
+      UI.error('PIN ทั้งสองช่องไม่ตรงกัน');
+      document.getElementById('pin2').value = '';
+      return;
+    }
+
+    const btn = document.getElementById('submitBtn');
+    await UI.withButton(btn, async () => {
+      try {
+        const res = await API.write('register', {
+          student_id: document.getElementById('studentId').value.trim(),
+          full_name: document.getElementById('fullName').value.trim(),
+          level: document.getElementById('level').value,
+          department: document.getElementById('department').value,
+          section: document.getElementById('section').value.trim(),
+          phone: document.getElementById('phone').value.trim(),
+          pin
+        }, { noRedirect: true });
+
+        document.querySelector('.card').innerHTML = `
+          <div class="text-center" style="padding:20px 0">
+            <div style="font-size:3rem">✅</div>
+            <h2>สมัครเรียบร้อยแล้ว</h2>
+            <p class="text-muted">${UI.esc(res.message_th)}</p>
+            <a href="login.html" class="btn btn--primary btn--block mt-3">ไปหน้าเข้าสู่ระบบ</a>
+          </div>`;
+        window.scrollTo(0, 0);
+      } catch (err) {
+        UI.apiError(err);
+      }
+    }, 'กำลังสมัคร...');
+  });
+})();
+</script>
+</body>
+</html>

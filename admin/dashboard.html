@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>แดชบอร์ด — E-Borrow</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+<div id="header"></div>
+
+<div class="page">
+  <div class="flex-between">
+    <h1>📊 แดชบอร์ด</h1>
+    <button class="btn btn--ghost btn--sm no-print" id="refreshBtn">🔄 รีเฟรช</button>
+  </div>
+
+  <div id="alerts"></div>
+  <div id="stats" class="stat-grid"></div>
+
+  <div class="section">
+    <div class="section__title">
+      <h2>🔴 ใครถืออะไรอยู่ตอนนี้</h2>
+      <span class="text-sm text-muted" id="outCount"></span>
+    </div>
+    <div id="outNow"></div>
+  </div>
+
+  <div class="section">
+    <div class="section__title"><h2>📉 อุปกรณ์ใกล้หมด</h2></div>
+    <div id="lowStock"></div>
+  </div>
+</div>
+
+<script src="../js/config.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/cart.js"></script>
+<script src="../js/ui.js"></script>
+<script>
+(async () => {
+  if (!UI.requireLogin(true)) return;
+  document.getElementById('header').innerHTML = UI.renderHeader('dashboard');
+
+  async function load() {
+    UI.loading(true);
+    try {
+      const d = await API.read('adminDashboard');
+      const s = d.stats;
+
+      document.getElementById('stats').innerHTML = `
+        <div class="stat ${s.pending_requests ? 'stat--warn' : ''}">
+          <div class="stat__value">${s.pending_requests}</div>
+          <div class="stat__label">คำขอรออนุมัติ</div>
+        </div>
+        <div class="stat ${s.awaiting_issue ? 'stat--warn' : ''}">
+          <div class="stat__value">${s.awaiting_issue}</div>
+          <div class="stat__label">รอจ่ายของ</div>
+        </div>
+        <div class="stat stat--ok">
+          <div class="stat__value">${s.items_out}</div>
+          <div class="stat__label">รายการที่ยืมอยู่</div>
+        </div>
+        <div class="stat ${s.overdue_count ? 'stat--danger' : ''}">
+          <div class="stat__value">${s.overdue_count}</div>
+          <div class="stat__label">เกินกำหนดคืน</div>
+        </div>`;
+
+      const alerts = [];
+      if (s.pending_students > 0) {
+        alerts.push(`<div class="alert alert--info">
+          มีนักเรียน <strong>${s.pending_students} คน</strong> รออนุมัติ
+          <a href="students.html">ไปอนุมัติ →</a></div>`);
+      }
+      if (s.awaiting_issue > 0) {
+        alerts.push(`<div class="alert alert--warn">
+          มี <strong>${s.awaiting_issue} รายการ</strong> อนุมัติแล้วแต่ยังไม่ได้จ่ายของ
+          <a href="requests.html">ไปจ่ายของ →</a></div>`);
+      }
+      if (s.overdue_count > 0) {
+        alerts.push(`<div class="alert alert--danger">
+          มี <strong>${s.overdue_count} รายการ</strong> เกินกำหนดคืนแล้ว</div>`);
+      }
+      document.getElementById('alerts').innerHTML = alerts.join('');
+
+      // ใครถืออะไรอยู่ — คำถามหลักที่ระบบนี้ต้องตอบให้ได้
+      document.getElementById('outCount').textContent =
+        d.out_now.length ? `${d.out_now.length} รายการ` : '';
+
+      document.getElementById('outNow').innerHTML = d.out_now.length ? `
+        <div class="card card--flush table-wrap">
+          <table class="data">
+            <thead><tr>
+              <th>นักเรียน</th><th>อุปกรณ์</th><th>กำหนดคืน</th><th>สถานะ</th><th></th>
+            </tr></thead>
+            <tbody>
+              ${d.out_now.map(t => {
+                const rel = UI.relativeDue(t.due_at);
+                const items = t.lines
+                  .filter(l => !l.is_consumable && l.outstanding > 0)
+                  .map(l => `${UI.esc(l.item_name)} × ${l.outstanding}`)
+                  .join(', ');
+                return `<tr>
+                  <td><strong>${UI.esc(t.student_name)}</strong>
+                      <div class="text-sm text-muted">${UI.esc(t.student_id)}</div></td>
+                  <td class="wrap">${items || '-'}</td>
+                  <td><span class="due-chip due-chip--${rel.overdue ? 'over' : 'ok'}">
+                        ${rel.text}</span>
+                      <div class="text-sm text-muted">${UI.formatDate(t.due_at, false)}</div></td>
+                  <td>${UI.statusBadge(t.status)}</td>
+                  <td><button class="btn btn--ok btn--sm no-print"
+                        data-act="receive" data-id="${UI.esc(t.txn_id)}">รับคืน</button></td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>` : UI.empty('ตอนนี้ไม่มีใครยืมอุปกรณ์อยู่', '✅');
+
+      document.getElementById('lowStock').innerHTML = d.low_stock.length ? `
+        <div class="card card--flush table-wrap">
+          <table class="data">
+            <thead><tr><th>อุปกรณ์</th><th>เหลือ</th><th>ขั้นต่ำ</th></tr></thead>
+            <tbody>${d.low_stock.map(i => `
+              <tr>
+                <td>${UI.esc(i.name_th)}</td>
+                <td><strong style="color:var(--danger)">${i.available_qty}</strong>
+                    ${UI.esc(i.unit)}</td>
+                <td class="text-muted">${i.min_qty}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>` : `<p class="text-muted text-sm">อุปกรณ์ทุกอย่างยังเพียงพอ</p>`;
+
+    } catch (err) {
+      UI.apiError(err);
+    } finally {
+      UI.loading(false);
+    }
+  }
+
+  document.getElementById('refreshBtn').addEventListener('click', load);
+
+  document.getElementById('outNow').addEventListener('click', async e => {
+    const btn = e.target.closest('[data-act="receive"]');
+    if (!btn) return;
+
+    if (!await UI.confirmDialog(
+      'รับคืนอุปกรณ์ทั้งหมดของรายการนี้ใช่ไหม? (ครูรับคืนเองโดยไม่ต้องมีรูป)',
+      'รับคืน')) return;
+
+    await UI.withButton(btn, async () => {
+      try {
+        await API.write('adminConfirmReturn', { txn_id: btn.dataset.id, condition: 'OK' });
+        UI.success('รับคืนเรียบร้อย');
+        await load();
+      } catch (err) { UI.apiError(err); }
+    }, 'กำลังรับคืน...');
+  });
+
+  await load();
+})();
+</script>
+</body>
+</html>

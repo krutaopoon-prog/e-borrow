@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>คืนอุปกรณ์ — E-Borrow</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div id="header"></div>
+
+<div class="page page--narrow">
+  <h1>📷 คืนอุปกรณ์</h1>
+  <div id="body"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/cart.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/image.js"></script>
+<script>
+(async () => {
+  if (!UI.requireLogin()) return;
+  document.getElementById('header').innerHTML = UI.renderHeader('loans');
+
+  const txnId = new URLSearchParams(location.search).get('txn');
+  const body = document.getElementById('body');
+
+  if (!txnId) {
+    body.innerHTML = UI.empty('ไม่ได้ระบุรายการที่จะคืน') +
+      `<div class="text-center"><a href="my-loans.html" class="btn btn--primary">กลับไปรายการของฉัน</a></div>`;
+    return;
+  }
+
+  let txn = null;
+  let photo = null;          // { base64, mimeType, bytes, previewUrl }
+  let requirePhoto = true;
+
+  function returnableLines() {
+    return txn.lines.filter(l => !l.is_consumable && l.outstanding > 0);
+  }
+
+  function render() {
+    const lines = returnableLines();
+
+    if (!lines.length) {
+      body.innerHTML = UI.empty('รายการนี้ไม่มีอุปกรณ์ที่ต้องคืนแล้ว', '✅') +
+        `<div class="text-center"><a href="my-loans.html" class="btn btn--primary">กลับ</a></div>`;
+      return;
+    }
+
+    body.innerHTML = `
+      <div class="card">
+        <div class="flex-between">
+          <div>
+            <div class="loan-card__id">${UI.esc(txn.txn_id)}</div>
+            <div class="text-sm text-muted">ยืมเมื่อ ${UI.formatDate(txn.issued_at)}</div>
+          </div>
+          ${UI.statusBadge(txn.status)}
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>1. เลือกจำนวนที่คืน</h2>
+        ${lines.map(l => `
+          <div class="line-item" data-line="${UI.esc(l.line_id)}">
+            <div class="line-item__info">
+              <div class="line-item__name">${UI.esc(l.item_name)}</div>
+              <div class="line-item__sub">ค้างอยู่ ${l.outstanding} ${UI.esc(l.unit)}</div>
+              <div class="flex-gap mt-2">
+                <div class="qty-control">
+                  <button type="button" data-act="dec">−</button>
+                  <input type="number" class="qty" value="${l.outstanding}"
+                         min="0" max="${l.outstanding}">
+                  <button type="button" data-act="inc">+</button>
+                </div>
+                <label class="text-sm flex-gap" style="gap:4px">
+                  <input type="checkbox" class="lost-check"> แจ้งว่าหาย/ชำรุด
+                </label>
+              </div>
+            </div>
+          </div>`).join('')}
+      </div>
+
+      <div class="card">
+        <h2>2. ถ่ายรูปอุปกรณ์ ${requirePhoto ? '<span class="required">*</span>' : ''}</h2>
+        <p class="text-sm text-muted">
+          ถ่ายรูปอุปกรณ์ที่นำมาคืน เป็นหลักฐานว่าคืนสภาพไหน
+        </p>
+        <div id="photoArea"></div>
+      </div>
+
+      <div class="card">
+        <div class="field">
+          <label for="note">หมายเหตุ (ไม่บังคับ)</label>
+          <textarea class="input" id="note" maxlength="200"
+                    placeholder="เช่น สายหัวแร้งมีรอยไหม้เล็กน้อย"></textarea>
+        </div>
+      </div>
+
+      <button class="btn btn--primary btn--block btn--lg" id="submitBtn">
+        ยืนยันการคืน
+      </button>
+      <a href="my-loans.html" class="btn btn--ghost btn--block mt-2">ยกเลิก</a>`;
+
+    renderPhotoArea();
+    bindLineControls();
+    document.getElementById('submitBtn').addEventListener('click', submit);
+  }
+
+  function renderPhotoArea() {
+    const area = document.getElementById('photoArea');
+    if (photo) {
+      area.innerHTML = `
+        <div class="photo-preview">
+          <img src="${photo.previewUrl}" alt="รูปอุปกรณ์ที่คืน">
+          <div class="photo-preview__meta">
+            <span>${(photo.bytes / 1024).toFixed(0)} KB</span>
+            <button class="btn btn--sm btn--ghost" style="background:rgba(255,255,255,.9)"
+                    id="retakeBtn">ถ่ายใหม่</button>
+          </div>
+        </div>`;
+      document.getElementById('retakeBtn').addEventListener('click', () => {
+        photo = null; renderPhotoArea();
+      });
+    } else {
+      area.innerHTML = `
+        <label class="photo-zone">
+          <div class="photo-zone__icon">📷</div>
+          <div><strong>แตะเพื่อถ่ายรูป</strong></div>
+          <div class="photo-zone__hint">หรือเลือกรูปจากเครื่อง</div>
+          <input type="file" accept="image/*" capture="environment" id="photoInput">
+        </label>`;
+      document.getElementById('photoInput').addEventListener('change', onPhotoPicked);
+    }
+  }
+
+  async function onPhotoPicked(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    UI.loading(true, 'กำลังย่อรูป...');
+    try {
+      photo = await ImageUtil.compress(file);
+      renderPhotoArea();
+    } catch (err) {
+      UI.error(err.message || 'ประมวลผลรูปไม่สำเร็จ');
+    } finally {
+      UI.loading(false);
+    }
+  }
+
+  function bindLineControls() {
+    document.querySelectorAll('[data-line]').forEach(row => {
+      const input = row.querySelector('.qty');
+      const max = parseInt(input.max, 10);
+
+      row.querySelector('[data-act="inc"]').addEventListener('click', () => {
+        input.value = Math.min(max, (parseInt(input.value, 10) || 0) + 1);
+      });
+      row.querySelector('[data-act="dec"]').addEventListener('click', () => {
+        input.value = Math.max(0, (parseInt(input.value, 10) || 0) - 1);
+      });
+    });
+  }
+
+  function collectLines() {
+    const out = [];
+    document.querySelectorAll('[data-line]').forEach(row => {
+      const qty = parseInt(row.querySelector('.qty').value, 10) || 0;
+      if (qty <= 0) return;
+      const lost = row.querySelector('.lost-check').checked;
+      out.push({
+        line_id: row.dataset.line,
+        qty_returned: lost ? 0 : qty,
+        qty_lost: lost ? qty : 0,
+        condition: lost ? 'LOST' : 'OK'
+      });
+    });
+    return out;
+  }
+
+  async function submit() {
+    const btn = document.getElementById('submitBtn');
+    const lines = collectLines();
+
+    if (!lines.length) {
+      UI.error('กรุณาระบุจำนวนที่คืนอย่างน้อย 1 ชิ้น');
+      return;
+    }
+    if (requirePhoto && !photo) {
+      UI.error('กรุณาถ่ายรูปอุปกรณ์ก่อนยืนยันการคืน');
+      return;
+    }
+
+    const note = document.getElementById('note').value.trim();
+
+    await UI.withButton(btn, async () => {
+      try {
+        // ขั้น 1 — จองการคืน (ยังไม่ตัดสต็อก)
+        UI.loading(true, 'กำลังเริ่มรายการคืน...');
+        const init = await API.write('initiateReturn', {
+          txn_id: txnId,
+          lines: lines.map(l => ({ ...l, note }))
+        });
+
+        // ขั้น 2 — อัปรูป (ช้าที่สุด แยกออกมาเพื่อ retry ได้)
+        if (photo) {
+          UI.loading(true, 'กำลังอัปโหลดรูป...');
+          await API.write('uploadReturnPhoto', {
+            return_id: init.return_id,
+            upload_token: init.upload_token,
+            filename: `${txnId}.jpg`,
+            mime_type: photo.mimeType,
+            data_base64: photo.base64
+          });
+        }
+
+        // ขั้น 3 — ตัดสต็อกจริงและปิดรายการ
+        UI.loading(true, 'กำลังบันทึกการคืน...');
+        const res = await API.write('finalizeReturn', {
+          return_id: init.return_id,
+          upload_token: init.upload_token
+        });
+
+        UI.loading(false);
+        body.innerHTML = `
+          <div class="card text-center" style="padding:28px 20px">
+            <div style="font-size:3rem">✅</div>
+            <h2>คืนอุปกรณ์เรียบร้อย</h2>
+            <p class="text-muted">${UI.esc(res.message_th)}</p>
+            ${res.photo_url ? `<img src="${UI.esc(res.photo_url)}"
+              style="max-width:200px;border-radius:8px;margin:12px auto;display:block" alt="">` : ''}
+            <div class="flex-gap mt-3" style="justify-content:center">
+              <a href="my-loans.html" class="btn btn--primary">ดูรายการของฉัน</a>
+              <a href="catalog.html" class="btn btn--ghost">ยืมอุปกรณ์อื่น</a>
+            </div>
+          </div>`;
+        window.scrollTo(0, 0);
+
+      } catch (err) {
+        UI.loading(false);
+        UI.apiError(err);
+      }
+    }, 'กำลังบันทึก...');
+  }
+
+  // ---- โหลดข้อมูล ----
+  UI.loading(true);
+  try {
+    const res = await API.read('getTransaction', { txn_id: txnId });
+    txn = res.transaction;
+
+    try {
+      const cfg = JSON.parse(localStorage.getItem(CONFIG.CATALOG_CACHE_KEY) || 'null');
+      if (cfg?.config) requirePhoto = cfg.config.require_photo_on_return !== false;
+    } catch {}
+
+    render();
+  } catch (err) {
+    UI.apiError(err);
+    body.innerHTML = UI.empty('โหลดข้อมูลไม่สำเร็จ') +
+      `<div class="text-center"><a href="my-loans.html" class="btn btn--primary">กลับ</a></div>`;
+  } finally {
+    UI.loading(false);
+  }
+})();
+</script>
+</body>
+</html>

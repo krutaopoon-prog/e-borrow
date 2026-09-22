@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>จัดการอุปกรณ์ — E-Borrow</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+<div id="header"></div>
+
+<div class="page">
+  <div class="flex-between">
+    <h1>🔧 จัดการอุปกรณ์</h1>
+    <div class="flex-gap">
+      <button class="btn btn--ghost btn--sm" id="catBtn">หมวดหมู่</button>
+      <button class="btn btn--primary btn--sm" id="addBtn">+ เพิ่มอุปกรณ์</button>
+    </div>
+  </div>
+
+  <div class="search-bar">
+    <input type="search" id="search" placeholder="🔍 ค้นหาอุปกรณ์..." autocomplete="off">
+  </div>
+
+  <div id="list"></div>
+</div>
+
+<div id="modalHost"></div>
+
+<script src="../js/config.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/cart.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/image.js"></script>
+<script>
+(async () => {
+  if (!UI.requireLogin(true)) return;
+  document.getElementById('header').innerHTML = UI.renderHeader('items');
+
+  let catalog = { items: [], categories: [] };
+  let query = '';
+
+  async function load() {
+    UI.loading(true);
+    try {
+      catalog = await API.read('getCatalog');
+      render();
+    } catch (err) {
+      UI.apiError(err);
+    } finally {
+      UI.loading(false);
+    }
+  }
+
+  function render() {
+    const q = query.trim().toLowerCase();
+    const items = catalog.items.filter(i =>
+      !q || `${i.name_th} ${i.name_en} ${i.tags}`.toLowerCase().includes(q));
+
+    const catName = id =>
+      catalog.categories.find(c => c.category_id === id)?.name_th || '-';
+
+    document.getElementById('list').innerHTML = items.length ? `
+      <div class="card card--flush table-wrap">
+        <table class="data">
+          <thead><tr>
+            <th>อุปกรณ์</th><th>หมวด</th><th>ประเภท</th>
+            <th>คงเหลือ</th><th>ทั้งหมด</th><th>ยืมอยู่</th><th></th>
+          </tr></thead>
+          <tbody>
+            ${items.map(i => `
+              <tr data-id="${UI.esc(i.item_id)}">
+                <td class="wrap">
+                  <div class="flex-gap">
+                    <div style="width:34px;height:34px;border-radius:5px;overflow:hidden;
+                                flex-shrink:0">${UI.itemImage(i)}</div>
+                    <div>
+                      <strong>${UI.esc(i.name_th)}</strong>
+                      <div class="text-sm text-muted">${UI.esc(i.item_id)}</div>
+                    </div>
+                  </div>
+                </td>
+                <td>${UI.esc(catName(i.category_id))}</td>
+                <td>${i.is_consumable
+                  ? '<span class="badge badge--warn">สิ้นเปลือง</span>'
+                  : '<span class="badge badge--info">คืนได้</span>'}</td>
+                <td><strong>${i.available_qty}</strong> ${UI.esc(i.unit)}</td>
+                <td>${i.total_qty}</td>
+                <td>${Math.max(0, i.total_qty - i.available_qty)}</td>
+                <td>
+                  <button class="btn btn--ghost btn--sm" data-act="edit">แก้ไข</button>
+                  <button class="btn btn--ghost btn--sm" data-act="stock">ปรับสต็อก</button>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>` : UI.empty(q ? 'ไม่พบอุปกรณ์' : 'ยังไม่มีอุปกรณ์ในระบบ กดปุ่ม "เพิ่มอุปกรณ์"', '🔧');
+  }
+
+  function closeModal() { document.getElementById('modalHost').innerHTML = ''; }
+
+  function openItemModal(item) {
+    const isNew = !item;
+    item = item || { unit: 'ชิ้น', is_consumable: false, total_qty: 0, status: 'ACTIVE' };
+
+    document.getElementById('modalHost').innerHTML = `
+      <div class="modal-backdrop is-visible">
+        <div class="modal" style="max-width:480px;max-height:90vh;overflow-y:auto">
+          <h2>${isNew ? 'เพิ่มอุปกรณ์ใหม่' : 'แก้ไขอุปกรณ์'}</h2>
+          <form id="itemForm">
+            <div class="field">
+              <label>ชื่ออุปกรณ์ <span class="required">*</span></label>
+              <input class="input" id="f_name" required value="${UI.esc(item.name_th || '')}"
+                     placeholder="เช่น หัวแร้งบัดกรี 60W">
+            </div>
+            <div class="field">
+              <label>หมวดหมู่</label>
+              <select class="input" id="f_cat">
+                <option value="">— ไม่ระบุ —</option>
+                ${catalog.categories.map(c => `
+                  <option value="${UI.esc(c.category_id)}"
+                    ${item.category_id === c.category_id ? 'selected' : ''}>
+                    ${UI.esc(c.name_th)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="flex-gap">
+              <div class="field" style="flex:1">
+                <label>หน่วยนับ</label>
+                <input class="input" id="f_unit" value="${UI.esc(item.unit || 'ชิ้น')}"
+                       placeholder="ตัว / อัน / ชิ้น">
+              </div>
+              <div class="field" style="flex:1">
+                <label>จำนวนทั้งหมด</label>
+                <input class="input" type="number" id="f_total" min="0"
+                       value="${item.total_qty || 0}">
+              </div>
+            </div>
+            <div class="field">
+              <label class="flex-gap" style="gap:6px">
+                <input type="checkbox" id="f_consumable" ${item.is_consumable ? 'checked' : ''}>
+                <span>เป็น<strong>ของสิ้นเปลือง</strong> (ใช้แล้วหมดไป ไม่ต้องคืน)</span>
+              </label>
+              <div class="hint">เช่น ตัวต้านทาน ตะกั่วบัดกรี สายไฟ</div>
+            </div>
+            <div class="flex-gap">
+              <div class="field" style="flex:1">
+                <label>ยืมได้สูงสุด/ครั้ง</label>
+                <input class="input" type="number" id="f_max" min="0"
+                       value="${item.max_per_borrow || 0}" placeholder="0 = ไม่จำกัด">
+              </div>
+              <div class="field" style="flex:1">
+                <label>แจ้งเตือนเมื่อเหลือ</label>
+                <input class="input" type="number" id="f_min" min="0"
+                       value="${item.min_qty || 0}">
+              </div>
+            </div>
+            <div class="field">
+              <label>ตำแหน่งเก็บ</label>
+              <input class="input" id="f_loc" value="${UI.esc(item.storage_location || '')}"
+                     placeholder="เช่น ตู้ A ชั้น 2">
+              <div class="hint">ใช้ทำใบรายการหยิบของ</div>
+            </div>
+            <div class="field">
+              <label>กำหนดคืน (วัน)</label>
+              <input class="input" type="number" id="f_due" min="0"
+                     value="${item.default_due_days ?? ''}" placeholder="เว้นว่าง = ใช้ค่ากลาง">
+              <div class="hint">0 = คืนภายในวันนี้ (จบคาบเรียน)</div>
+            </div>
+            <div class="field">
+              <label>คำค้นหา</label>
+              <input class="input" id="f_tags" value="${UI.esc(item.tags || '')}"
+                     placeholder="เช่น ตัวต้านทาน,resistor,R">
+            </div>
+            ${!isNew ? `
+            <div class="field">
+              <label>รูปอุปกรณ์</label>
+              <div id="photoArea"></div>
+            </div>` : `<div class="hint">บันทึกแล้วจึงเพิ่มรูปได้</div>`}
+
+            <div class="modal__actions mt-3">
+              <button type="button" class="btn btn--ghost" id="cancelBtn">ยกเลิก</button>
+              <button type="submit" class="btn btn--primary" id="saveBtn">บันทึก</button>
+            </div>
+          </form>
+        </div>
+      </div>`;
+
+    if (!isNew) renderPhotoArea(item);
+
+    document.getElementById('cancelBtn').addEventListener('click', closeModal);
+    document.getElementById('itemForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = document.getElementById('saveBtn');
+      const dueVal = document.getElementById('f_due').value;
+
+      await UI.withButton(btn, async () => {
+        try {
+          await API.call('adminUpsertItem', {
+            item: {
+              item_id: isNew ? '' : item.item_id,
+              name_th: document.getElementById('f_name').value.trim(),
+              category_id: document.getElementById('f_cat').value,
+              unit: document.getElementById('f_unit').value.trim() || 'ชิ้น',
+              total_qty: parseInt(document.getElementById('f_total').value, 10) || 0,
+              is_consumable: document.getElementById('f_consumable').checked,
+              max_per_borrow: parseInt(document.getElementById('f_max').value, 10) || 0,
+              min_qty: parseInt(document.getElementById('f_min').value, 10) || 0,
+              storage_location: document.getElementById('f_loc').value.trim(),
+              default_due_days: dueVal === '' ? undefined : parseInt(dueVal, 10),
+              tags: document.getElementById('f_tags').value.trim()
+            }
+          });
+          UI.success(isNew ? 'เพิ่มอุปกรณ์แล้ว' : 'บันทึกแล้ว');
+          closeModal();
+          await load();
+        } catch (err) { UI.apiError(err); }
+      }, 'กำลังบันทึก...');
+    });
+  }
+
+  function renderPhotoArea(item) {
+    const area = document.getElementById('photoArea');
+    if (!area) return;
+    area.innerHTML = item.photo_url
+      ? `<div class="flex-gap">
+           <img src="${UI.esc(item.photo_url)}" style="width:70px;height:70px;
+                object-fit:cover;border-radius:6px" alt="">
+           <label class="btn btn--ghost btn--sm">เปลี่ยนรูป
+             <input type="file" accept="image/*" id="itemPhoto" hidden></label>
+         </div>`
+      : `<label class="photo-zone" style="padding:16px">
+           <div class="photo-zone__icon" style="font-size:1.8rem">📷</div>
+           <div class="text-sm">แตะเพื่อเพิ่มรูป</div>
+           <input type="file" accept="image/*" id="itemPhoto">
+         </label>`;
+
+    document.getElementById('itemPhoto')?.addEventListener('change', async e => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      UI.loading(true, 'กำลังอัปโหลดรูป...');
+      try {
+        const img = await ImageUtil.compress(file, { maxEdge: 800 });
+        const res = await API.call('adminUploadItemPhoto', {
+          item_id: item.item_id,
+          mime_type: img.mimeType,
+          data_base64: img.base64
+        });
+        item.photo_url = res.url;
+        renderPhotoArea(item);
+        UI.success('อัปโหลดรูปแล้ว');
+        await load();
+      } catch (err) {
+        UI.apiError(err);
+      } finally {
+        UI.loading(false);
+      }
+    });
+  }
+
+  function openStockModal(item) {
+    document.getElementById('modalHost').innerHTML = `
+      <div class="modal-backdrop is-visible">
+        <div class="modal">
+          <h2>ปรับสต็อก: ${UI.esc(item.name_th)}</h2>
+          <p class="text-sm text-muted">
+            ตอนนี้เหลือ <strong>${item.available_qty}</strong> ${UI.esc(item.unit)}
+            จากทั้งหมด ${item.total_qty}
+          </p>
+          <div class="field">
+            <label>เพิ่ม/ลดจำนวน</label>
+            <input class="input" type="number" id="s_delta"
+                   placeholder="เช่น 100 (ซื้อเพิ่ม) หรือ -5 (ชำรุดทิ้ง)">
+            <div class="hint">ใส่ค่าลบเพื่อลดจำนวน</div>
+          </div>
+          <div class="field">
+            <label>เหตุผล <span class="required">*</span></label>
+            <input class="input" id="s_reason" required
+                   placeholder="เช่น ซื้อเพิ่ม / ตรวจนับประจำเทอม">
+          </div>
+          <div class="modal__actions">
+            <button class="btn btn--ghost" id="cancelBtn">ยกเลิก</button>
+            <button class="btn btn--primary" id="applyBtn">บันทึก</button>
+          </div>
+        </div>
+      </div>`;
+
+    document.getElementById('cancelBtn').addEventListener('click', closeModal);
+    document.getElementById('applyBtn').addEventListener('click', async e => {
+      const delta = parseInt(document.getElementById('s_delta').value, 10);
+      const reason = document.getElementById('s_reason').value.trim();
+
+      if (!delta) { UI.error('กรุณาระบุจำนวนที่ต้องการเพิ่มหรือลด'); return; }
+      if (!reason) { UI.error('กรุณาระบุเหตุผล'); return; }
+
+      await UI.withButton(e.target, async () => {
+        try {
+          await API.call('adminAdjustStock', {
+            item_id: item.item_id, delta_total: delta, reason
+          });
+          UI.success('ปรับสต็อกแล้ว');
+          closeModal();
+          await load();
+        } catch (err) { UI.apiError(err); }
+      }, 'กำลังบันทึก...');
+    });
+  }
+
+  function openCategoryModal() {
+    document.getElementById('modalHost').innerHTML = `
+      <div class="modal-backdrop is-visible">
+        <div class="modal">
+          <h2>หมวดหมู่อุปกรณ์</h2>
+          <div id="catList" style="margin-bottom:14px">
+            ${catalog.categories.map(c => `
+              <div class="flex-between" style="padding:6px 0;border-bottom:1px solid var(--line)">
+                <span>${UI.esc(c.icon || '📦')} ${UI.esc(c.name_th)}</span>
+                <span class="text-sm text-muted">${UI.esc(c.category_id)}</span>
+              </div>`).join('') || '<p class="text-muted text-sm">ยังไม่มีหมวดหมู่</p>'}
+          </div>
+          <div class="field">
+            <label>เพิ่มหมวดหมู่ใหม่</label>
+            <div class="flex-gap">
+              <input class="input" id="c_icon" style="width:60px" placeholder="📦" maxlength="2">
+              <input class="input" id="c_name" style="flex:1" placeholder="ชื่อหมวดหมู่">
+            </div>
+          </div>
+          <div class="modal__actions">
+            <button class="btn btn--ghost" id="cancelBtn">ปิด</button>
+            <button class="btn btn--primary" id="addCatBtn">เพิ่ม</button>
+          </div>
+        </div>
+      </div>`;
+
+    document.getElementById('cancelBtn').addEventListener('click', closeModal);
+    document.getElementById('addCatBtn').addEventListener('click', async e => {
+      const name = document.getElementById('c_name').value.trim();
+      if (!name) { UI.error('กรุณาใส่ชื่อหมวดหมู่'); return; }
+
+      await UI.withButton(e.target, async () => {
+        try {
+          await API.call('adminUpsertCategory', {
+            category: {
+              name_th: name,
+              icon: document.getElementById('c_icon').value.trim() || '📦',
+              sort_order: catalog.categories.length + 1
+            }
+          });
+          UI.success('เพิ่มหมวดหมู่แล้ว');
+          await load();
+          openCategoryModal();
+        } catch (err) { UI.apiError(err); }
+      }, 'กำลังเพิ่ม...');
+    });
+  }
+
+  document.getElementById('list').addEventListener('click', e => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const id = btn.closest('tr').dataset.id;
+    const item = catalog.items.find(i => i.item_id === id);
+    if (!item) return;
+
+    if (btn.dataset.act === 'edit') openItemModal(item);
+    else if (btn.dataset.act === 'stock') openStockModal(item);
+  });
+
+  document.getElementById('addBtn').addEventListener('click', () => openItemModal(null));
+  document.getElementById('catBtn').addEventListener('click', openCategoryModal);
+
+  let searchTimer;
+  document.getElementById('search').addEventListener('input', e => {
+    query = e.target.value;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(render, 180);
+  });
+
+  document.getElementById('modalHost').addEventListener('click', e => {
+    if (e.target.classList.contains('modal-backdrop')) closeModal();
+  });
+
+  await load();
+})();
+</script>
+</body>
+</html>
