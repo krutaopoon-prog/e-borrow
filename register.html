@@ -22,7 +22,7 @@
   </div>
 
   <div class="card">
-    <form id="regForm">
+    <form id="regForm" onsubmit="return false">
       <div class="field">
         <label for="studentId">รหัสนักศึกษา <span class="required">*</span></label>
         <input class="input" type="text" id="studentId" inputmode="numeric" required
@@ -93,18 +93,9 @@
 <script src="js/ui.js"></script>
 <script>
 (async () => {
-  try {
-    const cfg = await API.read('getPublicConfig', {}, { noRedirect: true, retries: 2 });
-
-    const levelSel = document.getElementById('level');
-    (cfg.levels || []).forEach(l => levelSel.add(new Option(l, l)));
-
-    const deptSel = document.getElementById('department');
-    (cfg.departments || []).forEach(d => deptSel.add(new Option(d, d)));
-  } catch (err) {
-    UI.error('โหลดข้อมูลไม่ได้ ตรวจสอบอินเทอร์เน็ต');
-  }
-
+  // ผูกปุ่มก่อนเสมอ อย่า await อะไรก่อนบรรทัดนี้
+  // ถ้าปล่อยให้รอเซิร์ฟเวอร์แล้วผู้ใช้กดปุ่มระหว่างรอ ฟอร์มจะถูกส่งแบบธรรมดา
+  // หน้าจะโหลดใหม่ และข้อมูลที่กรอกไว้จะหายหมด
   document.getElementById('regForm').addEventListener('submit', async e => {
     e.preventDefault();
 
@@ -143,6 +134,28 @@
       }
     }, 'กำลังสมัคร...');
   });
+
+  // โหลดตัวเลือกระดับชั้น/สาขาทีหลัง
+  // ปิดปุ่มไว้ก่อนจนกว่าจะโหลดเสร็จ เพราะสมัครไม่ได้ถ้ายังไม่มีตัวเลือกให้เลือก
+  const submitBtn = document.getElementById('submitBtn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'กำลังโหลดข้อมูล...';
+
+  try {
+    const cfg = await API.read('getPublicConfig', {}, { noRedirect: true, retries: 2 });
+
+    const levelSel = document.getElementById('level');
+    (cfg.levels || []).forEach(l => levelSel.add(new Option(l, l)));
+
+    const deptSel = document.getElementById('department');
+    (cfg.departments || []).forEach(d => deptSel.add(new Option(d, d)));
+
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'สมัครใช้งาน';
+  } catch (err) {
+    submitBtn.textContent = 'โหลดข้อมูลไม่ได้ — กรุณารีเฟรช';
+    UI.error('โหลดข้อมูลไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วรีเฟรชหน้านี้');
+  }
 })();
 </script>
 </body>

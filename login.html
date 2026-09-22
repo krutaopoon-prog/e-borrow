@@ -21,7 +21,7 @@
 
   <div class="card">
     <h2>เข้าสู่ระบบ</h2>
-    <form id="loginForm">
+    <form id="loginForm" onsubmit="return false">
       <div class="field">
         <label for="studentId">รหัสนักศึกษา</label>
         <input class="input" type="text" id="studentId" inputmode="numeric"
@@ -59,23 +59,9 @@
     return;
   }
 
-  try {
-    const cfg = await API.read('getPublicConfig', {}, { noRedirect: true, retries: 2 });
-    if (cfg.app_name) {
-      document.getElementById('appName').textContent = cfg.app_name;
-      document.title = 'เข้าสู่ระบบ — ' + cfg.app_name;
-    }
-    if (cfg.announcement) {
-      document.getElementById('announcement').innerHTML =
-        `<div class="alert alert--info">${UI.esc(cfg.announcement)}</div>`;
-    }
-  } catch (err) {
-    document.getElementById('announcement').innerHTML =
-      `<div class="alert alert--danger">
-         เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสอบอินเทอร์เน็ต หรือแจ้งครู
-       </div>`;
-  }
-
+  // ผูกปุ่มก่อนเสมอ อย่า await อะไรก่อนบรรทัดนี้
+  // ถ้าปล่อยให้รอเซิร์ฟเวอร์ (ซึ่งช้าได้หลายสิบวินาที) แล้วผู้ใช้กดปุ่มระหว่างรอ
+  // ฟอร์มจะถูกส่งแบบธรรมดา หน้าจะโหลดใหม่ และข้อมูลที่กรอกจะหายหมด
   document.getElementById('loginForm').addEventListener('submit', async e => {
     e.preventDefault();
     const btn = document.getElementById('submitBtn');
@@ -99,6 +85,24 @@
       }
     }, 'กำลังเข้าสู่ระบบ...');
   });
+
+  // โหลดชื่อระบบกับประกาศทีหลัง — ไม่สำคัญพอที่จะให้ปุ่มรอ
+  try {
+    const cfg = await API.read('getPublicConfig', {}, { noRedirect: true, retries: 2 });
+    if (cfg.app_name) {
+      document.getElementById('appName').textContent = cfg.app_name;
+      document.title = 'เข้าสู่ระบบ — ' + cfg.app_name;
+    }
+    if (cfg.announcement) {
+      document.getElementById('announcement').innerHTML =
+        `<div class="alert alert--info">${UI.esc(cfg.announcement)}</div>`;
+    }
+  } catch (err) {
+    document.getElementById('announcement').innerHTML =
+      `<div class="alert alert--danger">
+         เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสอบอินเทอร์เน็ต หรือแจ้งครู
+       </div>`;
+  }
 })();
 </script>
 </body>
