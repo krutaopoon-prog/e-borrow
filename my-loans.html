@@ -12,7 +12,7 @@
 <div id="header"></div>
 
 <div class="page">
-  <h1>📋 รายการของฉัน</h1>
+  <h1>รายการของฉัน</h1>
   <div id="summary"></div>
 
   <div class="category-strip" id="filters">
@@ -39,15 +39,7 @@
 
   function renderNav() {
     document.getElementById('header').innerHTML = UI.renderHeader('loans');
-    const n = Cart.count();
-    document.getElementById('bottomNav').innerHTML = `
-      <nav class="bottom-nav">
-        <a href="catalog.html"><span class="bottom-nav__icon">🏠</span>ยืมอุปกรณ์</a>
-        <a href="cart.html">
-          <span class="bottom-nav__icon">🛒${n ? `<span class="cart-badge">${n}</span>` : ''}</span>ตะกร้า</a>
-        <a href="my-loans.html" class="is-active">
-          <span class="bottom-nav__icon">📋</span>ของฉัน</a>
-      </nav>`;
+    document.getElementById('bottomNav').innerHTML = UI.renderBottomNav('loans');
   }
 
   function dueChip(txn) {
@@ -58,7 +50,7 @@
     const rel = UI.relativeDue(txn.due_at);
     const cls = rel.overdue ? 'over' : (new Date(txn.due_at) - Date.now() < 86400000 ? 'soon' : 'ok');
     return `<span class="due-chip due-chip--${cls}">
-      ${rel.overdue ? '⚠️ ' : '⏱ '}${rel.text}</span>`;
+      ${UI.icon(rel.overdue ? 'alert' : 'clock')}${rel.overdue ? '' : 'ครบกำหนดคืน'}${rel.text}</span>`;
   }
 
   function render() {
@@ -78,16 +70,17 @@
       const canCancel = ['REQUESTED', 'APPROVED'].includes(t.status);
       const canReturn = ['IN_USE', 'PARTIALLY_RETURNED', 'OVERDUE'].includes(t.status);
 
+      // หัวการ์ดเน้น "สถานะ + กำหนดคืน" — เลขรายการเป็นข้อมูลรอง
       return `
-      <div class="loan-card">
+      <div class="loan-card ${t.status === 'OVERDUE' ? 'loan-card--overdue' : ''}">
         <div class="loan-card__head">
           <div>
-            <div class="loan-card__id">${UI.esc(t.txn_id)}</div>
-            <div class="text-sm text-muted">ขอเมื่อ ${UI.formatDate(t.requested_at)}</div>
-          </div>
-          <div style="text-align:right">
             ${UI.statusBadge(t.status)}
             <div class="mt-2">${dueChip(t)}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="text-sm text-muted">ขอเมื่อ ${UI.formatDate(t.requested_at)}</div>
+            <div class="loan-card__id">${UI.esc(t.txn_id)}</div>
           </div>
         </div>
 
@@ -98,7 +91,7 @@
                 <div class="line-item__name">${UI.esc(l.item_name)}</div>
                 <div class="line-item__sub">
                   ${l.is_consumable
-                    ? '<span style="color:var(--warn)">ของสิ้นเปลือง</span>'
+                    ? '<span style="color:var(--warn-ink)">ของสิ้นเปลือง</span>'
                     : (l.qty_issued > 0
                         ? `คืนแล้ว ${l.qty_returned}/${l.qty_issued}` +
                           (l.qty_lost > 0 ? ` · หาย ${l.qty_lost}` : '')
@@ -117,14 +110,19 @@
                    style="max-width:180px;border-radius:8px;margin-top:6px" loading="lazy">
             </div>` : t.return_photo_deleted ? `
             <div class="mt-3 text-sm text-muted">รูปตอนคืนถูกลบตามอายุการเก็บ (4 เดือน)</div>` : ''}
+
+          ${t.status === 'APPROVED' ? `
+            <div class="loan-card__hint">ครูอนุมัติแล้ว — ไปรับอุปกรณ์ที่ครูได้เลย</div>` : ''}
+          ${t.status === 'REQUESTED' ? `
+            <div class="loan-card__hint">รอครูอนุมัติ — ครูอนุมัติแล้วจะแจ้งที่หน้านี้</div>` : ''}
         </div>
 
         ${canCancel || canReturn ? `
         <div class="loan-card__foot">
           ${canCancel ? `<button class="btn btn--ghost btn--sm"
             data-act="cancel" data-id="${UI.esc(t.txn_id)}">ยกเลิกคำขอ</button>` : ''}
-          ${canReturn ? `<a class="btn btn--primary btn--sm"
-            href="return.html?txn=${encodeURIComponent(t.txn_id)}">📷 คืนอุปกรณ์</a>` : ''}
+          ${canReturn ? `<a class="btn ${t.status === 'OVERDUE' ? 'btn--danger' : 'btn--primary'} btn--block"
+            href="return.html?txn=${encodeURIComponent(t.txn_id)}">${UI.icon('camera')} คืนอุปกรณ์</a>` : ''}
         </div>` : ''}
       </div>`;
     }).join('');
@@ -135,7 +133,7 @@
     const el = document.getElementById('summary');
     if (s.overdue > 0) {
       el.innerHTML = `<div class="alert alert--danger">
-        ⚠️ คุณมีอุปกรณ์<strong>เกินกำหนดคืน ${s.overdue} รายการ</strong>
+        คุณมีอุปกรณ์<strong>เกินกำหนดคืน ${s.overdue} รายการ</strong>
         — ต้องคืนก่อนจึงจะยืมใหม่ได้</div>`;
     } else if (s.active > 0) {
       el.innerHTML = `<div class="alert alert--info">

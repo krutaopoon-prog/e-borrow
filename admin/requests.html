@@ -13,10 +13,10 @@
 
 <div class="page">
   <div class="flex-between">
-    <h1>📥 คำขอยืม</h1>
+    <h1>คำขอยืม</h1>
     <div class="flex-gap no-print">
-      <button class="btn btn--ghost btn--sm" id="printBtn">🖨️ พิมพ์ใบหยิบของ</button>
-      <button class="btn btn--ghost btn--sm" id="refreshBtn">🔄</button>
+      <button class="btn btn--ghost btn--sm" id="printBtn" data-icon="printer">พิมพ์ใบหยิบของ</button>
+      <button class="btn btn--ghost btn--sm" id="refreshBtn" data-icon="refresh">รีเฟรช</button>
     </div>
   </div>
 
@@ -24,7 +24,7 @@
 
   <div class="section" id="pickListSection">
     <div class="section__title">
-      <h2>📦 ใบรายการหยิบของ</h2>
+      <h2>ใบรายการหยิบของ</h2>
       <span class="text-sm text-muted">เรียงตามตำแหน่งตู้</span>
     </div>
     <div id="pickList"></div>
@@ -36,6 +36,8 @@
   </div>
 </div>
 
+<div id="bottomNav"></div>
+
 <script src="../js/config.js"></script>
 <script src="../js/api.js"></script>
 <script src="../js/cart.js"></script>
@@ -44,6 +46,7 @@
 (async () => {
   if (!UI.requireLogin(true)) return;
   document.getElementById('header').innerHTML = UI.renderHeader('requests');
+  document.getElementById('bottomNav').innerHTML = UI.renderBottomNav('requests');
 
   async function load() {
     UI.loading(true);
@@ -74,7 +77,7 @@
             <div style="margin-bottom:14px">
               <div style="font-weight:600;color:var(--brand);
                           border-bottom:1px solid var(--line);padding-bottom:4px;margin-bottom:6px">
-                📍 ${UI.esc(loc)}
+                ${UI.icon('pin')} ${UI.esc(loc)}
               </div>
               ${items.map(p => `
                 <div class="flex-between" style="padding:3px 0;font-size:.9rem">
@@ -137,11 +140,11 @@
 
       <div class="loan-card__foot">
         ${isRequested ? `
-          <button class="btn btn--ghost btn--sm" data-act="reject">ปฏิเสธ</button>
+          <button class="btn btn--danger-outline btn--sm" data-act="reject">ปฏิเสธ</button>
           <button class="btn btn--ghost btn--sm" data-act="approve">อนุมัติไว้ก่อน</button>
         ` : ''}
-        <button class="btn btn--primary btn--sm" data-act="issue">
-          ${isRequested ? '✓ อนุมัติ + จ่ายของเลย' : '✓ จ่ายของแล้ว'}
+        <button class="btn btn--primary" data-act="issue">
+          ${UI.icon('check')} ${isRequested ? 'อนุมัติ + จ่ายของเลย' : 'จ่ายของแล้ว'}
         </button>
       </div>
     </div>`;

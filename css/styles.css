@@ -2,12 +2,13 @@
    นักเรียนใช้มือถือเป็นหลัก desktop เป็น progressive enhancement */
 
 :root {
-  --brand: #ee4d2d;          /* ส้มแบบ Shopee */
-  --brand-dark: #d73211;
+  /* ส้มแบบร้านค้าออนไลน์ เข้มขึ้นเล็กน้อยให้ตัวขาวบนส้มอ่านชัด (5.2:1 ผ่าน WCAG AA) */
+  --brand: #cc3418;
+  --brand-dark: #a92912;
   --brand-light: #fff1ee;
   --ink: #1f2937;
-  --ink-soft: #6b7280;
-  --ink-faint: #9ca3af;
+  --ink-soft: #5f6672;        /* ข้อความรอง — ผ่าน 4.5:1 ทั้งบนขาวและบนพื้นเทา */
+  --ink-faint: #9ca3af;       /* ของตกแต่งเท่านั้น ห้ามใช้กับข้อความ */
   --line: #e5e7eb;
   --bg: #f5f5f5;
   --surface: #ffffff;
@@ -19,6 +20,11 @@
   --danger-bg: #fef2f2;
   --info: #3b82f6;
   --info-bg: #eff6ff;
+  /* สีสถานะสำหรับ "ตัวอักษร" — สีด้านบนสว่างเกินจะใช้เป็นตัวหนังสือบนพื้นขาว */
+  --ok-ink: #047857;
+  --warn-ink: #b45309;
+  --danger-ink: #b91c1c;
+  --info-ink: #1d4ed8;
   --radius: 10px;
   --shadow: 0 1px 3px rgba(0,0,0,.08);
   --shadow-lg: 0 4px 16px rgba(0,0,0,.12);
@@ -46,6 +52,13 @@ h2 { font-size: 1.15rem; }
 h3 { font-size: 1rem; }
 p { margin: 0 0 .75em; }
 a { color: var(--brand); text-decoration: none; }
+
+/* ไอคอนเส้นจาก UI.icon() — ขนาดตามตัวอักษรรอบๆ */
+.icon { width: 1.15em; height: 1.15em; flex-shrink: 0; vertical-align: -.2em; }
+
+/* กรอบโฟกัสเวลาใช้คีย์บอร์ด (ไม่โผล่ตอนแตะนิ้ว) */
+:focus-visible { outline: 3px solid #1d4ed8; outline-offset: 2px; border-radius: 4px; }
+.app-header :focus-visible { outline-color: #fff; }
 
 /* ---------- layout ---------- */
 
@@ -86,7 +99,7 @@ a { color: var(--brand); text-decoration: none; }
   color: #fff; font-weight: 700; font-size: 1.05rem;
   white-space: nowrap;
 }
-.app-header__logo { font-size: 1.2rem; }
+.app-header__logo { width: 1.3em; height: 1.3em; }
 
 .app-header__nav { display: none; gap: 4px; margin-left: 12px; flex: 1; }
 .app-header__nav a {
@@ -101,11 +114,13 @@ a { color: var(--brand); text-decoration: none; }
 }
 
 .cart-link {
-  position: relative; color: #fff; font-size: 1.3rem;
-  padding: 4px 8px; line-height: 1;
+  position: relative; color: #fff; font-size: 1.35rem;
+  width: 42px; height: 42px; display: grid; place-items: center;
+  border-radius: 8px;
 }
+.cart-link:hover, .cart-link.is-active { background: rgba(0,0,0,.15); }
 .cart-badge {
-  position: absolute; top: -2px; right: 0;
+  position: absolute; top: 2px; right: 0;
   background: #fff; color: var(--brand);
   font-size: .68rem; font-weight: 700;
   min-width: 17px; height: 17px; padding: 0 4px;
@@ -114,7 +129,7 @@ a { color: var(--brand); text-decoration: none; }
 
 .btn-logout {
   background: rgba(255,255,255,.15); color: #fff;
-  border: 0; border-radius: 6px; padding: 6px 10px;
+  border: 0; border-radius: 8px; padding: 0 12px; min-height: 38px; margin-left: 4px;
   font-family: inherit; font-size: .85rem; cursor: pointer;
   display: flex; align-items: center; gap: 6px;
 }
@@ -129,11 +144,11 @@ a { color: var(--brand); text-decoration: none; }
 }
 .bottom-nav a {
   flex: 1; padding: 8px 4px; text-align: center; min-height: 56px; justify-content: center;
-  color: var(--ink-soft); font-size: .7rem;
+  color: var(--ink-soft); font-size: .76rem;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
 }
 .bottom-nav a.is-active { color: var(--brand); font-weight: 600; }
-.bottom-nav__icon { font-size: 1.25rem; line-height: 1; position: relative; }
+.bottom-nav__icon { font-size: 1.35rem; line-height: 1; position: relative; display: flex; }
 .bottom-nav .cart-badge { top: -4px; right: -8px; background: var(--brand); color: #fff; }
 
 /* ---------- cards ---------- */
@@ -154,8 +169,12 @@ a { color: var(--brand); text-decoration: none; }
   position: sticky; top: var(--header-h); z-index: 20;
   background: var(--bg); padding: 10px 0;
 }
+.search-bar__icon {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--ink-soft); pointer-events: none; display: flex;
+}
 .search-bar input {
-  flex: 1; padding: 10px 14px; font-size: .95rem;
+  flex: 1; padding: 10px 14px 10px 40px; font-size: .95rem;
   border: 1px solid var(--line); border-radius: 20px;
   font-family: inherit; background: var(--surface);
 }
@@ -209,33 +228,34 @@ a { color: var(--brand); text-decoration: none; }
 }
 .item-img--ph {
   display: grid; place-items: center;
-  font-size: 2.4rem; color: var(--ink-faint); background: #f3f4f6;
+  color: #c4c8cf; background: #f3f4f6;
 }
+.item-img--ph .icon { width: 34%; height: 34%; stroke-width: 1.5; }
 
 .item-card__body { padding: 9px 10px 10px; flex: 1; display: flex; flex-direction: column; }
 
 .item-card__name {
-  font-size: .9rem; font-weight: 500; line-height: 1.35;
+  font-size: .93rem; font-weight: 500; line-height: 1.4;
   margin-bottom: 5px;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
 .item-card__meta {
-  font-size: .78rem; color: var(--ink-soft);
+  font-size: .82rem; color: var(--ink-soft);
   margin-top: auto; display: flex; align-items: center;
   justify-content: space-between; gap: 6px; flex-wrap: wrap;
 }
 
 .item-card__stock { font-weight: 600; }
-.item-card__stock--ok { color: var(--ok); }
-.item-card__stock--low { color: var(--warn); }
-.item-card__stock--out { color: var(--danger); }
+.item-card__stock--ok { color: var(--ok-ink); }
+.item-card__stock--low { color: var(--warn-ink); }
+.item-card__stock--out { color: var(--danger-ink); }
 
 .tag-consumable {
   position: absolute; top: 6px; left: 6px;
-  background: rgba(245,158,11,.95); color: #fff;
-  font-size: .66rem; padding: 2px 7px; border-radius: 4px;
+  background: var(--warn-ink); color: #fff;
+  font-size: .75rem; padding: 2px 8px; border-radius: 4px;
   font-weight: 600;
 }
 .tag-out {
@@ -258,18 +278,34 @@ a { color: var(--brand); text-decoration: none; }
 .btn--primary:hover:not(:disabled) { background: var(--brand-dark); }
 .btn--ghost { background: transparent; border-color: var(--line); color: var(--ink); }
 .btn--ghost:hover:not(:disabled) { background: #f9fafb; }
-.btn--danger { background: var(--danger); color: #fff; }
-.btn--ok { background: var(--ok); color: #fff; }
+.btn--danger { background: var(--danger-ink); color: #fff; }
+.btn--danger-outline { background: var(--surface); border-color: #fca5a5; color: var(--danger-ink); }
+.btn--danger-outline:hover:not(:disabled) { background: var(--danger-bg); }
+.btn--ok { background: var(--ok-ink); color: #fff; }
 .btn--block { width: 100%; }
-.btn--sm { padding: 6px 12px; font-size: .84rem; }
+.btn--sm { padding: 7px 12px; font-size: .86rem; min-height: 36px; }
 .btn--lg { padding: 13px 20px; font-size: 1rem; }
 
 .btn-add {
-  width: 100%; margin-top: 8px;
+  width: 100%; margin-top: 8px; min-height: 40px;
   background: var(--brand); color: #fff; border: 0;
-  padding: 7px; border-radius: 6px; font-family: inherit;
-  font-size: .85rem; font-weight: 500; cursor: pointer;
+  padding: 8px; border-radius: 8px; font-family: inherit;
+  font-size: .9rem; font-weight: 600; cursor: pointer;
 }
+.btn-add:hover:not(:disabled) { background: var(--brand-dark); }
+
+/* ตัวปรับจำนวนบนการ์ด — แทนปุ่ม "ใส่ตะกร้า" เมื่อของอยู่ในตะกร้าแล้ว */
+.card-stepper {
+  margin-top: 8px; display: flex; align-items: center;
+  border: 1.5px solid var(--brand); border-radius: 8px; overflow: hidden;
+}
+.card-stepper button {
+  width: 40px; height: 38px; border: 0; background: var(--brand-light);
+  color: var(--brand); font-size: 1.2rem; font-weight: 700; cursor: pointer;
+  font-family: inherit;
+}
+.card-stepper button:disabled { color: var(--ink-faint); background: #f3f4f6; cursor: not-allowed; }
+.card-stepper span { flex: 1; text-align: center; font-size: .86rem; font-weight: 600; color: var(--brand); }
 .btn-add:disabled { background: var(--line); color: var(--ink-faint); cursor: not-allowed; }
 
 /* ---------- ตัวปรับจำนวน ---------- */
@@ -280,13 +316,13 @@ a { color: var(--brand); text-decoration: none; }
   background: var(--surface);
 }
 .qty-control button {
-  width: 32px; height: 32px; border: 0; background: #f9fafb;
+  width: 40px; height: 40px; border: 0; background: #f9fafb;
   font-size: 1.1rem; cursor: pointer; color: var(--ink);
   display: grid; place-items: center; font-family: inherit;
 }
 .qty-control button:disabled { color: var(--ink-faint); cursor: not-allowed; }
 .qty-control input {
-  width: 46px; height: 32px; border: 0; text-align: center;
+  width: 48px; height: 40px; border: 0; text-align: center;
   font-family: inherit; font-size: .92rem;
   border-left: 1px solid var(--line); border-right: 1px solid var(--line);
   -moz-appearance: textfield;
@@ -301,7 +337,7 @@ a { color: var(--brand); text-decoration: none; }
   display: block; font-size: .87rem; font-weight: 500;
   margin-bottom: 5px; color: var(--ink);
 }
-.field .hint { font-size: .78rem; color: var(--ink-soft); margin-top: 4px; }
+.field .hint { font-size: .82rem; color: var(--ink-soft); margin-top: 4px; }
 .field .required { color: var(--danger); }
 
 .input, select.input, textarea.input {
@@ -321,8 +357,8 @@ textarea.input { resize: vertical; min-height: 70px; }
 /* ---------- badge / chip ---------- */
 
 .badge {
-  display: inline-block; padding: 2px 9px;
-  border-radius: 11px; font-size: .75rem; font-weight: 600;
+  display: inline-block; padding: 2px 10px;
+  border-radius: 11px; font-size: .8rem; font-weight: 600;
   white-space: nowrap;
 }
 .badge--ok { background: var(--ok-bg); color: #047857; }
@@ -339,7 +375,10 @@ textarea.input { resize: vertical; min-height: 70px; }
   padding: 12px 14px; border-bottom: 1px solid var(--line);
   display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
 }
-.loan-card__id { font-size: .78rem; color: var(--ink-faint); font-family: monospace; }
+.loan-card__id { font-size: .76rem; color: var(--ink-soft); font-family: monospace; }
+/* เกินกำหนดคืน — แถบแดงซ้ายการ์ดให้เห็นตั้งแต่ไกล */
+.loan-card--overdue { border-left: 4px solid var(--danger-ink); }
+.loan-card__hint { font-size: .86rem; color: var(--info-ink); margin-top: 8px; }
 .loan-card__body { padding: 12px 14px; }
 .loan-card__foot {
   padding: 10px 14px; background: #fafafa; border-top: 1px solid var(--line);
@@ -355,13 +394,13 @@ textarea.input { resize: vertical; min-height: 70px; }
   overflow: hidden; flex-shrink: 0; background: #f3f4f6; }
 .line-item__info { flex: 1; min-width: 0; }
 .line-item__name { font-size: .9rem; font-weight: 500; }
-.line-item__sub { font-size: .78rem; color: var(--ink-soft); }
+.line-item__sub { font-size: .82rem; color: var(--ink-soft); }
 .line-item__qty { font-size: .88rem; font-weight: 600; white-space: nowrap; }
 
-.due-chip { font-size: .78rem; font-weight: 600; }
-.due-chip--ok { color: var(--ok); }
-.due-chip--soon { color: var(--warn); }
-.due-chip--over { color: var(--danger); }
+.due-chip { font-size: .84rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+.due-chip--ok { color: var(--ok-ink); }
+.due-chip--soon { color: var(--warn-ink); }
+.due-chip--over { color: var(--danger-ink); }
 
 /* ---------- ตาราง (หน้าครู) ---------- */
 
@@ -396,7 +435,7 @@ table.data td.wrap { white-space: normal; min-width: 150px; }
 .stat--warn { border-left-color: var(--warn); }
 .stat--ok { border-left-color: var(--ok); }
 .stat__value { font-size: 1.7rem; font-weight: 700; line-height: 1.1; }
-.stat__label { font-size: .8rem; color: var(--ink-soft); margin-top: 2px; }
+.stat__label { font-size: .84rem; color: var(--ink-soft); margin-top: 2px; }
 
 /* ---------- ถ่ายรูป ---------- */
 
@@ -406,7 +445,7 @@ table.data td.wrap { white-space: normal; min-width: 150px; }
   background: var(--surface); transition: border-color .15s, background .15s;
 }
 .photo-zone:hover { border-color: var(--brand); background: var(--brand-light); }
-.photo-zone__icon { font-size: 2.6rem; margin-bottom: 8px; }
+.photo-zone__icon { font-size: 2.6rem; margin-bottom: 8px; color: var(--brand); display: flex; justify-content: center; }
 .photo-zone__hint { font-size: .82rem; color: var(--ink-soft); }
 .photo-zone input[type=file] { display: none; }
 
@@ -469,6 +508,45 @@ table.data td.wrap { white-space: normal; min-width: 150px; }
 .empty-state { text-align: center; padding: 44px 20px; color: var(--ink-soft); }
 .empty-state__icon { font-size: 3rem; margin-bottom: 10px; opacity: .55; }
 
+/* ---------- หน้ายืมอุปกรณ์: สถานะของฉัน + ขั้นตอน ---------- */
+
+.status-banner {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border-radius: var(--radius); margin-bottom: 12px;
+  border: 1px solid; font-size: .92rem;
+}
+.status-banner > .icon { width: 1.4em; height: 1.4em; }
+.status-banner__text { flex: 1; min-width: 0; }
+.status-banner__text small { display: block; font-size: .84rem; }
+.status-banner__text a { color: inherit; text-decoration: underline; }
+.status-banner .btn { white-space: nowrap; }
+.status-banner--danger { background: var(--danger-bg); border-color: #fca5a5; color: var(--danger-ink); }
+.status-banner--ok { background: var(--ok-bg); border-color: #6ee7b7; color: var(--ok-ink); }
+.status-banner--info { background: var(--info-bg); border-color: #93c5fd; color: var(--info-ink); }
+
+.steps {
+  background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 12px 14px; margin-bottom: 12px; position: relative;
+}
+.steps__title { font-weight: 600; font-size: .92rem; margin-bottom: 8px; padding-right: 36px; }
+.steps__list {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 12px;
+  margin: 0; padding: 0; list-style: none; counter-reset: step;
+}
+.steps__list li { display: flex; align-items: center; gap: 8px; font-size: .86rem; counter-increment: step; }
+.steps__list li::before {
+  content: counter(step); flex-shrink: 0;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--brand-light); color: var(--brand);
+  display: grid; place-items: center; font-weight: 700; font-size: .8rem;
+}
+.steps__close {
+  position: absolute; top: 6px; right: 6px; width: 36px; height: 36px;
+  border: 0; background: none; color: var(--ink-soft); cursor: pointer;
+  border-radius: 6px; display: grid; place-items: center; font-size: 1.1rem;
+}
+.steps__close:hover { background: #f3f4f6; }
+
 .alert {
   padding: 11px 14px; border-radius: 8px; font-size: .88rem;
   margin-bottom: 14px; border-left: 3px solid;
@@ -499,7 +577,7 @@ table.data td.wrap { white-space: normal; min-width: 150px; }
 .is-bump { animation: bump .35s ease; }
 
 .text-muted { color: var(--ink-soft); }
-.text-sm { font-size: .84rem; }
+.text-sm { font-size: .86rem; }
 .text-center { text-align: center; }
 .mt-2 { margin-top: 8px; }
 .mt-3 { margin-top: 14px; }
@@ -515,6 +593,7 @@ table.data td.wrap { white-space: normal; min-width: 150px; }
   .stat-grid { grid-template-columns: repeat(4, 1fr); }
   .user-name { display: inline; }
   .page { padding: 20px; padding-bottom: 40px; }
+  .steps__list { grid-template-columns: repeat(4, 1fr); }
 }
 
 @media (min-width: 900px) {
@@ -536,4 +615,11 @@ table.data td.wrap { white-space: normal; min-width: 150px; }
   .app-header, .bottom-nav, .sticky-bar, .btn, .no-print { display: none !important; }
   body { background: #fff; }
   .card { box-shadow: none; border: 1px solid var(--line); }
+}
+
+/* โลโก้หน้าเข้าสู่ระบบ/สมัคร */
+.brand-mark {
+  width: 64px; height: 64px; margin: 0 auto 12px; border-radius: 18px;
+  background: var(--brand); color: #fff; font-size: 1.9rem;
+  display: grid; place-items: center; box-shadow: var(--shadow-lg);
 }

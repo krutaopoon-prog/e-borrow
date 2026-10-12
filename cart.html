@@ -12,7 +12,7 @@
 <div id="header"></div>
 
 <div class="page page--has-bar">
-  <h1>🛒 ตะกร้ายืม</h1>
+  <h1>ตะกร้ายืม</h1>
   <div id="alerts"></div>
   <div id="cartBody"></div>
 </div>
@@ -30,14 +30,7 @@
 
   function renderNav() {
     document.getElementById('header').innerHTML = UI.renderHeader('cart');
-    const n = Cart.count();
-    document.getElementById('bottomNav').innerHTML = `
-      <nav class="bottom-nav">
-        <a href="catalog.html"><span class="bottom-nav__icon">🏠</span>ยืมอุปกรณ์</a>
-        <a href="cart.html" class="is-active">
-          <span class="bottom-nav__icon">🛒${n ? `<span class="cart-badge">${n}</span>` : ''}</span>ตะกร้า</a>
-        <a href="my-loans.html"><span class="bottom-nav__icon">📋</span>ของฉัน</a>
-      </nav>`;
+    document.getElementById('bottomNav').innerHTML = UI.renderBottomNav('cart');
   }
 
   function render() {
@@ -64,7 +57,7 @@
               <div class="line-item__name">${UI.esc(l.name_th)}</div>
               <div class="line-item__sub">
                 เหลือ ${l.available_qty} ${UI.esc(l.unit)}
-                ${l.is_consumable ? ' · <span style="color:var(--warn)">ของสิ้นเปลือง ไม่ต้องคืน</span>' : ''}
+                ${l.is_consumable ? ' · <span style="color:var(--warn-ink)">ของสิ้นเปลือง ไม่ต้องคืน</span>' : ''}
               </div>
               <div class="flex-gap mt-2">
                 <div class="qty-control">

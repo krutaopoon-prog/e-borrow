@@ -12,10 +12,10 @@
 <div id="header"></div>
 
 <div class="page">
-  <h1>👥 จัดการนักเรียน</h1>
+  <h1>จัดการนักเรียน</h1>
 
   <div class="section" id="pendingSection">
-    <div class="section__title"><h2>⏳ รออนุมัติ</h2></div>
+    <div class="section__title"><h2>รออนุมัติ</h2></div>
     <div id="pending"></div>
   </div>
 
@@ -30,6 +30,8 @@
 
 <div id="modalHost"></div>
 
+<div id="bottomNav"></div>
+
 <script src="../js/config.js"></script>
 <script src="../js/api.js"></script>
 <script src="../js/cart.js"></script>
@@ -38,6 +40,7 @@
 (async () => {
   if (!UI.requireLogin(true)) return;
   document.getElementById('header').innerHTML = UI.renderHeader('students');
+  document.getElementById('bottomNav').innerHTML = UI.renderBottomNav('students');
 
   let students = [];
   let query = '';

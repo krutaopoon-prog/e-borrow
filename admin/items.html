@@ -13,7 +13,7 @@
 
 <div class="page">
   <div class="flex-between">
-    <h1>🔧 จัดการอุปกรณ์</h1>
+    <h1>จัดการอุปกรณ์</h1>
     <div class="flex-gap">
       <button class="btn btn--ghost btn--sm" id="catBtn">หมวดหมู่</button>
       <button class="btn btn--primary btn--sm" id="addBtn">+ เพิ่มอุปกรณ์</button>
@@ -21,13 +21,17 @@
   </div>
 
   <div class="search-bar">
-    <input type="search" id="search" placeholder="🔍 ค้นหาอุปกรณ์..." autocomplete="off">
+    <span class="search-bar__icon" data-icon="search"></span>
+    <input type="search" id="search" placeholder="ค้นหาอุปกรณ์..." autocomplete="off"
+           aria-label="ค้นหาอุปกรณ์">
   </div>
 
   <div id="list"></div>
 </div>
 
 <div id="modalHost"></div>
+
+<div id="bottomNav"></div>
 
 <script src="../js/config.js"></script>
 <script src="../js/api.js"></script>
@@ -38,6 +42,7 @@
 (async () => {
   if (!UI.requireLogin(true)) return;
   document.getElementById('header').innerHTML = UI.renderHeader('items');
+  document.getElementById('bottomNav').innerHTML = UI.renderBottomNav('items');
 
   let catalog = { items: [], categories: [] };
   let query = '';
@@ -73,7 +78,7 @@
             ${items.map(i => `
               <tr data-id="${UI.esc(i.item_id)}">
                 <td class="wrap">
-                  <div class="flex-gap">
+                  <div class="flex-gap" style="flex-wrap:nowrap">
                     <div style="width:34px;height:34px;border-radius:5px;overflow:hidden;
                                 flex-shrink:0">${UI.itemImage(i)}</div>
                     <div>
@@ -231,7 +236,7 @@
              <input type="file" accept="image/*" id="itemPhoto" hidden></label>
          </div>`
       : `<label class="photo-zone" style="padding:16px">
-           <div class="photo-zone__icon" style="font-size:1.8rem">📷</div>
+           <div class="photo-zone__icon" style="font-size:1.8rem">${UI.icon('camera')}</div>
            <div class="text-sm">แตะเพื่อเพิ่มรูป</div>
            <input type="file" accept="image/*" id="itemPhoto">
          </label>`;

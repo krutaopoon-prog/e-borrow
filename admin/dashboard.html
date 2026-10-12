@@ -13,8 +13,8 @@
 
 <div class="page">
   <div class="flex-between">
-    <h1>📊 แดชบอร์ด</h1>
-    <button class="btn btn--ghost btn--sm no-print" id="refreshBtn">🔄 รีเฟรช</button>
+    <h1>แดชบอร์ด</h1>
+    <button class="btn btn--ghost btn--sm no-print" id="refreshBtn" data-icon="refresh">รีเฟรช</button>
   </div>
 
   <div id="alerts"></div>
@@ -23,17 +23,19 @@
 
   <div class="section">
     <div class="section__title">
-      <h2>🔴 ใครถืออะไรอยู่ตอนนี้</h2>
+      <h2>ใครถืออะไรอยู่ตอนนี้</h2>
       <span class="text-sm text-muted" id="outCount"></span>
     </div>
     <div id="outNow"></div>
   </div>
 
   <div class="section">
-    <div class="section__title"><h2>📉 อุปกรณ์ใกล้หมด</h2></div>
+    <div class="section__title"><h2>อุปกรณ์ใกล้หมด</h2></div>
     <div id="lowStock"></div>
   </div>
 </div>
+
+<div id="bottomNav"></div>
 
 <script src="../js/config.js"></script>
 <script src="../js/api.js"></script>
@@ -43,6 +45,7 @@
 (async () => {
   if (!UI.requireLogin(true)) return;
   document.getElementById('header').innerHTML = UI.renderHeader('dashboard');
+  document.getElementById('bottomNav').innerHTML = UI.renderBottomNav('dashboard');
 
   async function load() {
     UI.loading(true);

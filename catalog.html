@@ -12,10 +12,14 @@
 <div id="header"></div>
 
 <div class="page">
+  <div id="myStatus"></div>
+  <div id="steps"></div>
   <div id="alerts"></div>
 
   <div class="search-bar">
-    <input type="search" id="search" placeholder="🔍 ค้นหาอุปกรณ์..." autocomplete="off">
+    <span class="search-bar__icon" id="searchIcon"></span>
+    <input type="search" id="search" placeholder="ค้นหาอุปกรณ์..." autocomplete="off"
+           aria-label="ค้นหาอุปกรณ์">
   </div>
 
   <div class="category-strip" id="categories"></div>
@@ -41,17 +45,86 @@
 
   function renderNav() {
     document.getElementById('header').innerHTML = UI.renderHeader('catalog');
-    const n = Cart.count();
-    document.getElementById('bottomNav').innerHTML = `
-      <nav class="bottom-nav">
-        <a href="catalog.html" class="is-active">
-          <span class="bottom-nav__icon">🏠</span>ยืมอุปกรณ์</a>
-        <a href="cart.html">
-          <span class="bottom-nav__icon">🛒${n ? `<span class="cart-badge">${n}</span>` : ''}</span>ตะกร้า</a>
-        <a href="my-loans.html">
-          <span class="bottom-nav__icon">📋</span>ของฉัน</a>
-      </nav>`;
+    document.getElementById('bottomNav').innerHTML = UI.renderBottomNav('catalog');
     renderCheckoutBar();
+  }
+
+  /**
+   * สถานะของฉัน — นักเรียนเห็นทันทีว่ามีของต้องคืน / คำขอรอครู
+   * โดยไม่ต้องไปเปิดหน้า "ของฉัน" เอง
+   */
+  function renderMyStatus(txns) {
+    const el = document.getElementById('myStatus');
+    const by = s => txns.filter(t => s.includes(t.status));
+    const overdue = by(['OVERDUE']);
+    const inUse = by(['IN_USE', 'PARTIALLY_RETURNED']);
+    const ready = by(['APPROVED']);
+    const waiting = by(['REQUESTED']);
+
+    // เรียงตามความเร่งด่วน: เกินกำหนด > ไปรับของ > กำลังยืม > รออนุมัติ
+    const items = [];
+    if (overdue.length) items.push({ cls: 'danger', icon: 'alert',
+      title: `มีของเกินกำหนดคืน ${overdue.length} รายการ`, sub: 'คืนก่อนจึงจะยืมใหม่ได้',
+      action: `<a class="btn btn--danger btn--sm" href="return.html?txn=${encodeURIComponent(overdue[0].txn_id)}">คืนเลย</a>`,
+      short: `เกินกำหนด ${overdue.length}` });
+    if (ready.length) items.push({ cls: 'info', icon: 'check',
+      title: `ครูอนุมัติแล้ว ${ready.length} รายการ`, sub: 'ไปรับอุปกรณ์ที่ครูได้เลย',
+      short: `รอรับของ ${ready.length}` });
+    if (inUse.length) {
+      const next = inUse.slice().sort((x, y) => (x.due_at || '').localeCompare(y.due_at || ''))[0];
+      items.push({ cls: 'ok', icon: 'clock',
+        title: `กำลังยืมอยู่ ${inUse.length} รายการ`, sub: `ครบกำหนดคืน${UI.relativeDue(next.due_at).text}`,
+        action: `<a class="btn btn--ghost btn--sm" href="my-loans.html">ดู / คืน</a>`,
+        short: `กำลังยืม ${inUse.length}` });
+    }
+    if (waiting.length) items.push({ cls: 'info', icon: 'clock',
+      title: `คำขอรอครูอนุมัติ ${waiting.length} รายการ`, sub: 'ครูอนุมัติแล้วจะขึ้นที่นี่',
+      action: `<a class="btn btn--ghost btn--sm" href="my-loans.html">ดูคำขอ</a>`,
+      short: `รออนุมัติ ${waiting.length}` });
+
+    if (!items.length) { el.innerHTML = ''; renderSteps(true); return; }
+
+    const [top, ...rest] = items;
+    const more = rest.length
+      ? ` · <a href="my-loans.html">${rest.map(r => r.short).join(' · ')}</a>` : '';
+    el.innerHTML = `
+      <div class="status-banner status-banner--${top.cls}" ${top.cls === 'danger' ? 'role="alert"' : ''}>
+        ${UI.icon(top.icon)}
+        <div class="status-banner__text"><strong>${top.title}</strong>
+          <small>${top.sub}${more}</small></div>
+        ${top.action || ''}
+      </div>`;
+    renderSteps(false);
+  }
+
+  // ขั้นตอนการยืม — สำหรับคนที่ยังไม่มีรายการค้าง ปิดได้และจำไว้
+  function renderSteps(show) {
+    let hidden = false;
+    try { hidden = localStorage.getItem('eborrow_hide_steps') === '1'; } catch {}
+    const el = document.getElementById('steps');
+    if (!show || hidden) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+      <div class="steps">
+        <div class="steps__title">ยืมอุปกรณ์ง่ายๆ 4 ขั้นตอน</div>
+        <button class="steps__close" id="hideSteps" aria-label="ซ่อนขั้นตอน">${UI.icon('x')}</button>
+        <ol class="steps__list">
+          <li>เลือกอุปกรณ์ใส่ตะกร้า</li>
+          <li>กดส่งคำขอยืม</li>
+          <li>รับของจากครู</li>
+          <li>คืนพร้อมถ่ายรูป</li>
+        </ol>
+      </div>`;
+    document.getElementById('hideSteps').addEventListener('click', () => {
+      try { localStorage.setItem('eborrow_hide_steps', '1'); } catch {}
+      el.innerHTML = '';
+    });
+  }
+
+  async function loadMyStatus() {
+    try {
+      const res = await API.read('myTransactions', { status_filter: 'open' });
+      renderMyStatus(res.transactions);
+    } catch { /* ไม่ใช่ข้อมูลหลักของหน้า โหลดไม่ได้ก็ข้าม */ }
   }
 
   // ใส่ตะกร้าแล้วต้องเห็นทันทีว่าขั้นต่อไปคืออะไร — ไม่ต้องไปหาไอคอนตะกร้าเอง
@@ -65,7 +138,7 @@
     bar.innerHTML = `
       <div class="sticky-bar sticky-bar--nav">
         <div class="sticky-bar__info">
-          🛒 เลือกแล้ว <strong>${kinds}</strong> ชนิด · <strong>${Cart.count()}</strong> ชิ้น
+          ${UI.icon('cart')} เลือกแล้ว <strong>${kinds}</strong> ชนิด · <strong>${Cart.count()}</strong> ชิ้น
           <div class="text-sm text-muted">เลือกครบแล้วกดปุ่มเพื่อส่งคำขอ</div>
         </div>
         <a href="cart.html" class="btn btn--primary btn--lg ${bump ? 'is-bump' : ''}">ไปส่งคำขอยืม →</a>
@@ -121,13 +194,19 @@
               เหลือ ${item.available_qty} ${UI.esc(item.unit)}
             </span>
             ${item.max_per_borrow > 0
-              ? `<span class="text-muted" style="font-size:.72rem">ไม่เกิน ${item.max_per_borrow}</span>`
+              ? `<span class="text-muted">ยืมได้ไม่เกิน ${item.max_per_borrow}</span>`
               : ''}
           </div>
-          <button class="btn-add" data-id="${UI.esc(item.item_id)}"
-                  ${out || atMax ? 'disabled' : ''}>
-            ${out ? 'หมด' : inCart ? `ในตะกร้า ${inCart} ${UI.esc(item.unit)}` : '+ ใส่ตะกร้า'}
-          </button>
+          ${inCart ? `
+            <div class="card-stepper" data-id="${UI.esc(item.item_id)}">
+              <button data-step="-1" aria-label="ลดจำนวน ${UI.esc(item.name_th)}">−</button>
+              <span title="จำนวนในตะกร้า">${inCart} ${UI.esc(item.unit)}</span>
+              <button data-step="1" ${atMax ? 'disabled' : ''}
+                      aria-label="เพิ่มจำนวน ${UI.esc(item.name_th)}">+</button>
+            </div>` : `
+            <button class="btn-add" data-id="${UI.esc(item.item_id)}" ${out ? 'disabled' : ''}>
+              ${out ? 'หมด' : '+ ใส่ตะกร้า'}
+            </button>`}
         </div>
       </div>`;
     }).join('');
@@ -204,6 +283,16 @@
   });
 
   document.getElementById('itemGrid').addEventListener('click', e => {
+    // ปุ่ม − / + บนการ์ดที่อยู่ในตะกร้าแล้ว
+    const step = e.target.closest('[data-step]');
+    if (step && !step.disabled) {
+      const id = step.closest('.card-stepper').dataset.id;
+      Cart.setQty(id, Cart.qtyOf(id) + Number(step.dataset.step));
+      renderNav();
+      renderItems();
+      return;
+    }
+
     const btn = e.target.closest('.btn-add');
     if (!btn || btn.disabled) return;
 
@@ -219,7 +308,9 @@
 
   document.addEventListener('cart:changed', renderNav);
 
+  document.getElementById('searchIcon').innerHTML = UI.icon('search');
   renderNav();
+  loadMyStatus();
   await loadCatalog(false);
 })();
 </script>
