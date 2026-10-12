@@ -36,7 +36,7 @@
   }
 
   let txn = null;
-  let photo = null;          // { base64, mimeType, bytes, previewUrl }
+  let photo = null;          // { blob, mimeType, bytes, previewUrl }
   let requirePhoto = true;
 
   function returnableLines() {
@@ -207,16 +207,10 @@
           lines: lines.map(l => ({ ...l, note }))
         });
 
-        // ขั้น 2 — อัปรูป (ช้าที่สุด แยกออกมาเพื่อ retry ได้)
+        // ขั้น 2 — อัปรูปตรงไป Storage ด้วยตั๋วที่ได้จากขั้น 1
         if (photo) {
           UI.loading(true, 'กำลังอัปโหลดรูป...');
-          await API.write('uploadReturnPhoto', {
-            return_id: init.return_id,
-            upload_token: init.upload_token,
-            filename: `${txnId}.jpg`,
-            mime_type: photo.mimeType,
-            data_base64: photo.base64
-          });
+          await API.uploadPhoto(init.upload_bucket, init.upload_token, photo.blob, txnId);
         }
 
         // ขั้น 3 — ตัดสต็อกจริงและปิดรายการ

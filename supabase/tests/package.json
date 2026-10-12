@@ -1,0 +1,12 @@
+{
+  "name": "eborrow-sql-tests",
+  "private": true,
+  "type": "module",
+  "description": "ทดสอบ SQL ทั้งหมดด้วย Postgres จำลองในเครื่อง (PGlite) — ไม่ต้องมี Supabase",
+  "scripts": {
+    "test": "node sql.test.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.8"
+  }
+}

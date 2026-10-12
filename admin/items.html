@@ -241,12 +241,10 @@
       if (!file) return;
       UI.loading(true, 'กำลังอัปโหลดรูป...');
       try {
-        const img = await ImageUtil.compress(file, { maxEdge: 800 });
-        const res = await API.call('adminUploadItemPhoto', {
-          item_id: item.item_id,
-          mime_type: img.mimeType,
-          data_base64: img.base64
-        });
+        const img = await ImageUtil.compress(file, { maxEdge: CONFIG.IMAGE.ITEM_MAX_EDGE });
+        const ticket = await API.call('adminCreateItemUploadTicket', { item_id: item.item_id });
+        await API.uploadPhoto(ticket.upload_bucket, ticket.upload_token, img.blob, item.item_id);
+        const res = await API.call('adminUploadItemPhoto', { upload_token: ticket.upload_token });
         item.photo_url = res.url;
         renderPhotoArea(item);
         UI.success('อัปโหลดรูปแล้ว');

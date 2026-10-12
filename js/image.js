@@ -1,9 +1,8 @@
 /**
  * image.js — บีบอัดรูปก่อนอัปโหลด
  *
- * กล้องมือถือถ่ายได้ 3-8 MB ส่งดิบขึ้น Apps Script ไม่ได้
- * (base64 บวกอีก 33% + ไวไฟวิทยาลัยช้า + จำกัด 6 นาที)
- * ย่อเหลือด้านยาว 1280px คุณภาพ 0.7 จะได้ ~80-200 KB ส่งครั้งเดียวจบ
+ * กล้องมือถือถ่ายได้ 3-8 MB แต่ Supabase ฟรีมีพื้นที่ 1 GB
+ * ย่อเหลือด้านยาว 800px เป็น WebP (~40-60 KB) — มือถือเก่าที่ทำ WebP ไม่ได้ใช้ JPEG แทน
  */
 
 const ImageUtil = (() => {
@@ -83,14 +82,14 @@ const ImageUtil = (() => {
     return canvas;
   }
 
-  function toBlob(canvas, quality) {
+  function toBlob(canvas, type, quality) {
     return new Promise(resolve =>
-      canvas.toBlob(b => resolve(b), 'image/jpeg', quality));
+      canvas.toBlob(b => resolve(b), type, quality));
   }
 
   /**
    * บีบอัดจนได้ขนาดที่รับได้ ลองคุณภาพลดหลั่นกันไป
-   * คืน { base64, mimeType, bytes, previewUrl }
+   * คืน { blob, mimeType, bytes, previewUrl }
    */
   async function compress(file, opts = {}) {
     const maxEdge = opts.maxEdge || CONFIG.IMAGE.MAX_EDGE;
@@ -105,9 +104,13 @@ const ImageUtil = (() => {
     const img = await loadImage(file);
     const canvas = drawOriented(img, orientation, maxEdge);
 
+    // เบราว์เซอร์ที่ทำ WebP ไม่ได้ (Safari รุ่นเก่า) จะคืน PNG มาแทน — เช็กแล้วถอยไป JPEG
+    const probe = await toBlob(canvas, 'image/webp', steps[0]);
+    const type = probe?.type === 'image/webp' ? 'image/webp' : 'image/jpeg';
+
     let blob = null;
     for (const q of steps) {
-      blob = await toBlob(canvas, q);
+      blob = (type === 'image/webp' && q === steps[0]) ? probe : await toBlob(canvas, type, q);
       if (blob && blob.size <= maxBytes) break;
     }
 
@@ -116,26 +119,12 @@ const ImageUtil = (() => {
       throw new Error('รูปใหญ่เกินไป กรุณาถ่ายใหม่ให้ใกล้ขึ้นหรือแสงสว่างกว่านี้');
     }
 
-    const base64 = await blobToBase64(blob);
     return {
-      base64,
-      mimeType: 'image/jpeg',
+      blob,
+      mimeType: type,
       bytes: blob.size,
-      previewUrl: canvas.toDataURL('image/jpeg', 0.5)
+      previewUrl: URL.createObjectURL(blob)
     };
-  }
-
-  function blobToBase64(blob) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        // ตัด prefix "data:image/jpeg;base64," ออก เหลือแต่ข้อมูล
-        const s = reader.result;
-        resolve(s.slice(s.indexOf(',') + 1));
-      };
-      reader.onerror = () => reject(new Error('อ่านไฟล์ไม่ได้'));
-      reader.readAsDataURL(blob);
-    });
   }
 
   return { compress, getOrientation };

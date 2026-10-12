@@ -19,6 +19,7 @@
 
   <div id="alerts"></div>
   <div id="stats" class="stat-grid"></div>
+  <p class="text-sm text-muted" id="storageInfo"></p>
 
   <div class="section">
     <div class="section__title">
@@ -82,7 +83,26 @@
         alerts.push(`<div class="alert alert--danger">
           มี <strong>${s.overdue_count} รายการ</strong> เกินกำหนดคืนแล้ว</div>`);
       }
+      // ผลกระทบยอดรายคืน — ระบบไม่แก้ให้เอง ครูต้องกดยืนยัน
+      if (d.reconcile?.length) {
+        alerts.push(`<div class="alert alert--danger">
+          ตรวจพบยอดสต็อกไม่ตรง <strong>${d.reconcile.length} รายการ</strong>:
+          ${d.reconcile.slice(0, 5).map(m =>
+            `${UI.esc(m.name_th)} (${m.problems.map(UI.esc).join(', ')})`).join(' · ')}
+          <button class="btn btn--sm btn--ghost no-print" id="fixStockBtn">แก้ยอดให้ตรงกับรายการยืม</button>
+        </div>`);
+      }
+      const pct = s.storage_mb / s.storage_limit_mb * 100;
+      if (pct >= 80) {
+        alerts.push(`<div class="alert alert--warn">
+          พื้นที่เก็บรูปใช้ไป <strong>${s.storage_mb} / ${s.storage_limit_mb} MB</strong>
+          — ลดค่า <code>return_photo_retention_days</code> ในตาราง config เพื่อลบรูปเก่าเร็วขึ้น</div>`);
+      }
       document.getElementById('alerts').innerHTML = alerts.join('');
+      document.getElementById('fixStockBtn')?.addEventListener('click', fixStock);
+
+      document.getElementById('storageInfo').textContent =
+        `พื้นที่รูป ${s.storage_mb} / ${s.storage_limit_mb} MB (${pct.toFixed(0)}%)`;
 
       // ใครถืออะไรอยู่ — คำถามหลักที่ระบบนี้ต้องตอบให้ได้
       document.getElementById('outCount').textContent =
@@ -137,6 +157,19 @@
     } finally {
       UI.loading(false);
     }
+  }
+
+  async function fixStock(e) {
+    if (!await UI.confirmDialog(
+      'ตั้งยอดจองและยอดที่ยืมออกไปให้ตรงกับรายการยืมจริงใช่ไหม? (ทุกการแก้ถูกบันทึกในประวัติสต็อก)',
+      'แก้ยอด')) return;
+    await UI.withButton(e.target, async () => {
+      try {
+        const res = await API.read('adminReconcile', { apply: true });
+        UI.success(`แก้ยอดแล้ว ${res.applied} รายการ`);
+        await load();
+      } catch (err) { UI.apiError(err); }
+    }, 'กำลังแก้...');
   }
 
   document.getElementById('refreshBtn').addEventListener('click', load);
