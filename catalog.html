@@ -24,6 +24,7 @@
   <div id="emptyState"></div>
 </div>
 
+<div id="checkoutBar"></div>
 <div id="bottomNav"></div>
 
 <script src="js/config.js"></script>
@@ -50,6 +51,25 @@
         <a href="my-loans.html">
           <span class="bottom-nav__icon">📋</span>ของฉัน</a>
       </nav>`;
+    renderCheckoutBar();
+  }
+
+  // ใส่ตะกร้าแล้วต้องเห็นทันทีว่าขั้นต่อไปคืออะไร — ไม่ต้องไปหาไอคอนตะกร้าเอง
+  function renderCheckoutBar(bump) {
+    const kinds = Cart.lineCount();
+    const page = document.querySelector('.page');
+    const bar = document.getElementById('checkoutBar');
+    page.classList.toggle('page--has-bar', kinds > 0);
+    if (!kinds) { bar.innerHTML = ''; return; }
+
+    bar.innerHTML = `
+      <div class="sticky-bar sticky-bar--nav">
+        <div class="sticky-bar__info">
+          🛒 เลือกแล้ว <strong>${kinds}</strong> ชนิด · <strong>${Cart.count()}</strong> ชิ้น
+          <div class="text-sm text-muted">เลือกครบแล้วกดปุ่มเพื่อส่งคำขอ</div>
+        </div>
+        <a href="cart.html" class="btn btn--primary btn--lg ${bump ? 'is-bump' : ''}">ไปส่งคำขอยืม →</a>
+      </div>`;
   }
 
   function stockClass(item) {
@@ -192,6 +212,7 @@
 
     Cart.add(item, 1);
     renderNav();
+    renderCheckoutBar(true);
     renderItems();
     UI.toast(`เพิ่ม "${item.name_th}" ลงตะกร้าแล้ว`, 'success', 1600);
   });

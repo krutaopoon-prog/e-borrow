@@ -11,7 +11,7 @@
 <body>
 <div id="header"></div>
 
-<div class="page">
+<div class="page page--has-bar">
   <h1>🛒 ตะกร้ายืม</h1>
   <div id="alerts"></div>
   <div id="cartBody"></div>
@@ -97,7 +97,7 @@
 
     const totalQty = lines.reduce((n, l) => n + l.qty, 0);
     bar.innerHTML = `
-      <div class="sticky-bar">
+      <div class="sticky-bar sticky-bar--nav">
         <div class="sticky-bar__info">
           <strong>${lines.length}</strong> ชนิด · รวม <strong>${totalQty}</strong> ชิ้น
         </div>
