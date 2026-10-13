@@ -30,6 +30,14 @@
   </div>
 
   <div class="section">
+    <div class="section__title">
+      <h2>คืนล่าสุด (14 วัน)</h2>
+      <span class="text-sm text-muted" id="returnCount"></span>
+    </div>
+    <div id="recentReturns"></div>
+  </div>
+
+  <div class="section">
     <div class="section__title"><h2>อุปกรณ์ใกล้หมด</h2></div>
     <div id="lowStock"></div>
   </div>
@@ -139,6 +147,44 @@
             </tbody>
           </table>
         </div>` : UI.empty('ตอนนี้ไม่มีใครยืมอุปกรณ์อยู่', '✅');
+
+      const returns = d.recent_returns || [];
+      document.getElementById('returnCount').textContent =
+        returns.length ? `${returns.length} รายการ` : '';
+
+      // รูปตอนคืน — กดที่รูปเพื่อเปิดขนาดเต็มในแท็บใหม่
+      document.getElementById('recentReturns').innerHTML = returns.length ? `
+        <div class="card card--flush table-wrap">
+          <table class="data">
+            <thead><tr>
+              <th>นักเรียน</th><th>อุปกรณ์ที่คืน</th><th>คืนเมื่อ</th><th>รูปตอนคืน</th>
+            </tr></thead>
+            <tbody>
+              ${returns.map(t => {
+                const items = t.lines
+                  .filter(l => !l.is_consumable && (l.qty_returned > 0 || l.qty_lost > 0))
+                  .map(l => `${UI.esc(l.item_name)} × ${l.qty_returned}` +
+                            (l.qty_lost > 0 ? ` (หาย ${l.qty_lost})` : ''))
+                  .join(', ');
+                const photo = t.return_photo_url
+                  ? `<a href="${UI.esc(t.return_photo_url)}" target="_blank" rel="noopener">
+                       <img src="${UI.esc(t.return_photo_url)}" alt="รูปตอนคืน" loading="lazy"
+                            style="width:96px;height:96px;object-fit:cover;border-radius:8px;display:block"></a>`
+                  : `<span class="text-sm text-muted">${t.return_photo_deleted
+                      ? 'ลบตามอายุการเก็บแล้ว' : 'ไม่มีรูป (ครูรับคืนเอง)'}</span>`;
+                return `<tr>
+                  <td><strong>${UI.esc(t.student_name)}</strong>
+                      <div class="text-sm text-muted">${UI.esc(t.student_id)}</div></td>
+                  <td class="wrap">${items || '-'}
+                      ${t.return_note ? `<div class="text-sm text-muted">${UI.esc(t.return_note)}</div>` : ''}</td>
+                  <td>${t.returned_at ? UI.formatDate(t.returned_at) : ''}
+                      <div>${UI.statusBadge(t.status)}</div></td>
+                  <td>${photo}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>` : `<p class="text-muted text-sm">ยังไม่มีการคืนในช่วง 14 วันที่ผ่านมา</p>`;
 
       document.getElementById('lowStock').innerHTML = d.low_stock.length ? `
         <div class="card card--flush table-wrap">

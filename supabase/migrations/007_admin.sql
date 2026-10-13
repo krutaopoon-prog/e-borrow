@@ -447,6 +447,13 @@ language sql stable as $$
       select jsonb_agg(jsonb_build_object('item_id', item_id, 'name_th', name_th,
         'available_qty', available_qty, 'min_qty', min_qty, 'unit', unit) order by name_th)
       from items where min_qty > 0 and available_qty <= min_qty and status = 'ACTIVE'), '[]'),
+    -- คืนล่าสุด 14 วัน — ให้ครูเปิดดูรูปตอนคืนได้ (รวมคืนบางส่วน)
+    'recent_returns', coalesce((
+      select jsonb_agg(serialize_txn(r) order by coalesce(r.returned_at, r.updated_at) desc)
+      from (select * from transactions
+            where status in ('RETURNED', 'PARTIALLY_RETURNED')
+              and coalesce(returned_at, updated_at) > now() - interval '14 days'
+            order by coalesce(returned_at, updated_at) desc limit 30) r), '[]'),
     'reconcile', (select mismatches from reconcile_reports order by id desc limit 1),
     'stats', jsonb_build_object(
       'pending_requests', (select count(*) from transactions where status = 'REQUESTED'),

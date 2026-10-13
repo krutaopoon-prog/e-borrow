@@ -160,6 +160,8 @@ r = await api('myTransactions', { status_filter: 'closed' }, stu);
 check('my transactions', r.ok && r.data.transactions.length === 3, r.data?.transactions?.length);
 r = await api('adminDashboard', {}, admin);
 check('dashboard', r.ok && r.data.stats.storage_mb === 0.1, r.data?.stats);
+check('dashboard recent returns show photo', r.data.recent_returns.length === 2
+  && r.data.recent_returns.find(t => t.txn_id === txn)?.return_photo_url.includes('/return-photos/'), r.data?.recent_returns);
 
 // ---- adjust stock ----
 r = await api('adminAdjustStock', { item_id: resist, delta_total: 50, reason: 'ซื้อเพิ่ม' }, admin);
