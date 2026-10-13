@@ -178,7 +178,7 @@ const UI = (() => {
 
   function itemImage(item) {
     if (item.photo_url) {
-      return `<img src="${esc(item.photo_url)}" alt="${esc(item.name_th)}" loading="lazy"
+      return `<img class="item-img" src="${esc(item.photo_url)}" alt="${esc(item.name_th)}" loading="lazy"
         onerror="this.outerHTML=UI.PLACEHOLDER">`;
     }
     return PLACEHOLDER;
